@@ -8,7 +8,8 @@
  *   head  the app's magic (APP_BACKUP_MAGIC), u16 its version (APP_BACKUP_VERSION), u16 the count of objects,
  *         u32 flags (bit 0: taken while playing, changes not yet saved left out), u32 CRC-32 of the 12 bytes before
  *   the records, in APP_BACKUP_OBJS's order: u16 object id, u16 length, u32 CRC-32 of the payload, the payload
- *         (length 0: the object absent; a restore makes it absent)
+ *         (length 0: the object absent; a restore makes it absent). An earlier version of the app may have saved
+ *         fewer: the first of APP_BACKUP_OBJS (it had no others), the count says so; a restore makes the rest absent
  *   tail  u32 CRC-32 of everything before
  * (CRC-32: zlib's, as storage.c's st_crc32)
  *
@@ -397,13 +398,13 @@ static int rs_commit(void)
 static int restore_rx(uint32_t len, uint32_t crc, int *begun_out)
 {
     uint8_t hd[BU_HEAD];
-    uint32_t c, pos, i, k;
+    uint32_t c, pos, i, k, n;
     int rc = 0, begun = 0;
     if (rs_playing()) {
         rc = RS_E_PLAYING;
         goto out;
     }
-    if (len < BU_HEAD + BU_NOBJ * BU_REC + 4u || len > BU_MAXIMG) {
+    if (len < BU_HEAD + BU_REC + 4u || len > BU_MAXIMG) {
         rc = RS_E_SIZE;
         goto out;
     }
@@ -411,9 +412,14 @@ static int restore_rx(uint32_t len, uint32_t crc, int *begun_out)
         rc = RS_E_FETCH;
         goto out;
     }
-    if (bu_rd32(hd) != BU_MAGIC || bu_rd16(hd + 4) != BU_VERSION || bu_rd16(hd + 6) != BU_NOBJ ||
+    n = bu_rd16(hd + 6);                              /* (fewer: an earlier version's backup) */
+    if (bu_rd32(hd) != BU_MAGIC || bu_rd16(hd + 4) != BU_VERSION || !n || n > BU_NOBJ ||
         bu_rd32(hd + 12) != bu_crc(0, hd, 12)) {
         rc = RS_E_HEAD;
+        goto out;
+    }
+    if (len < BU_HEAD + n * BU_REC + 4u) {
+        rc = RS_E_SIZE;
         goto out;
     }
     rs_begin();
@@ -421,7 +427,7 @@ static int restore_rx(uint32_t len, uint32_t crc, int *begun_out)
     rs_show(0);
     c = bu_crc(0, hd, BU_HEAD);
     pos = BU_HEAD;
-    for (i = 0; i < BU_NOBJ; i++) {
+    for (i = 0; i < n; i++) {
         rs_ent_t *e = &rs_rec.e[i];
         uint8_t r[BU_REC];
         if (rs_fetch(pos, r, BU_REC)) {
@@ -453,6 +459,14 @@ static int restore_rx(uint32_t len, uint32_t crc, int *begun_out)
         if ((rc = rs_stage(e)) != 0)
             goto out;
         rs_show((i + 1u) * 90u / BU_NOBJ);
+    }
+    for (; i < BU_NOBJ; i++) {                        /* the objects it did not have yet: absent */
+        rs_ent_t *e = &rs_rec.e[i];
+        e->obj = (uint16_t)bu_obj(i);
+        e->len = 0;
+        e->crc = bu_crc(0, bu_buf, 0);
+        if ((rc = rs_stage(e)) != 0)
+            goto out;
     }
     {
         uint8_t t[4];

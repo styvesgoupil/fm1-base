@@ -456,6 +456,39 @@ int main(int argc, char **argv)
         check("... saving after it works (the next seq)", st_load(OBJ_PAT0 + 3, now.d[0], 64) == 50 &&
                                                          !memcmp(now.d[0], b, 50));
     }
+    {   /* an earlier version's backup: its first 5 objects (it had no others); the slot saved just now made absent */
+        static uint8_t full[sizeof img];
+        uint32_t full_n = img_n, pos = BU_HEAD, k = 5;
+        int all;
+        memcpy(full, img, img_n);
+        for (uint32_t i = 0; i < k; i++)
+            pos += BU_REC + bu_rd16(img + pos + 2);
+        bu_wr16(img + 6, k);
+        bu_wr32(img + 12, bu_crc(0, img, 12));
+        bu_wr32(img + pos, bu_crc(0, img, pos));
+        img_n = pos + 4u;
+        rc = restore();
+        snap(&now);
+        all = rc == 0;
+        for (uint32_t i = 0; i < BU_NOBJ; i++)
+            all &= i < k ? (now.n[i] < 0) == (set_a.n[i] < 0) &&
+                               (now.n[i] <= 0 || (now.n[i] == set_a.n[i] && !memcmp(now.d[i], set_a.d[i], now.n[i])))
+                         : now.n[i] < 0;
+        check("an earlier version's backup (fewer): restored, the rest absent", all);
+        all = 1;
+        for (int j = 0; j < 2; j++) {
+            bu_wr16(img + 6, j ? 0u : BU_NOBJ + 1u);
+            bu_wr32(img + 12, bu_crc(0, img, 12));
+            bu_wr32(img + pos, bu_crc(0, img, pos));
+            snap(&set_b);
+            rc = restore();
+            snap(&now);
+            all &= rc == RS_E_HEAD && same(&now, &set_b);
+        }
+        check("... none, or more than the app has: RS_E_HEAD, nothing changed", all);
+        memcpy(img, full, full_n);
+        img_n = full_n;
+    }
 
     /* ---- a power cut at every flash write: old or new after the boot, whole */
     {

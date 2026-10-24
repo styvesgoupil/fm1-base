@@ -43,7 +43,9 @@
  *                                checked whole, every object replaced, everything reloaded; refused while playing
  *                                (STOP FIRST) or when damaged: nothing changes (expect restore_rc: 0, 10 playing)
  *   backup_damage FILE           (FM1B_BACKUP) a byte of a backup file changed (at its middle)
- * FILE "out:NAME" for backup, restore, backup_damage and mirror: NAME in OUTDIR (fbdump: always there).
+ *   backup_trim FILE N           (FM1B_BACKUP) a backup file cut to its first N objects, as an earlier version of the
+ *                                app saved it (its count N, its CRCs made again): the rest absent at restore
+ * FILE "out:NAME" for backup, restore, backup_damage, backup_trim and mirror: NAME in OUTDIR (fbdump: always there).
  * NAME_host --serve [OUTDIR] (FM1B_MIRROR): driven over stdin by a tool, as an FM-1 over USB:
  *   sx HEX      one SysEx message from the host (F0 .. F7, hex): the mirror's requests (cmd 0x50, 0x54)
  *   run MS      MS milliseconds of the device; then what it sent meanwhile, a line "sx HEX" a message, and "ok NOW"
@@ -696,6 +698,7 @@ static int sim_backup(const char *path)
 static int sim_restore(const char *path)          /* 0, or backup.c's RS_E_*: 10 playing, 3 the head, 4..6 damaged */
 {
     size_t n, pos = 16;
+    int k;                                        /* its objects (fewer: an earlier version's, the rest absent) */
     FILE *f = fopen(path, "rb");
     if (!f)
         return 1;
@@ -703,11 +706,12 @@ static int sim_restore(const char *path)          /* 0, or backup.c's RS_E_*: 10
     fclose(f);
     if (app_backup_playing())
         return 10;                                /* STOP FIRST */
-    if (n < 16u + (size_t)SIM_NOBJ * 8u + 4u || sim_rd32(sim_img) != APP_BACKUP_MAGIC ||
-        (uint32_t)(sim_img[4] | sim_img[5] << 8) != APP_BACKUP_VERSION || sim_img[6] != SIM_NOBJ ||
+    k = n < 16u ? 0 : sim_img[6] | sim_img[7] << 8;
+    if (k < 1 || k > SIM_NOBJ || n < 16u + (size_t)k * 8u + 4u || sim_rd32(sim_img) != APP_BACKUP_MAGIC ||
+        (uint32_t)(sim_img[4] | sim_img[5] << 8) != APP_BACKUP_VERSION ||
         sim_rd32(sim_img + 12) != sim_crc32(0, sim_img, 12))
         return 3;
-    for (int i = 0; i < SIM_NOBJ; i++) {          /* all checked before anything changes */
+    for (int i = 0; i < k; i++) {                 /* all checked before anything changes */
         const uint8_t *r = sim_img + pos;
         uint32_t len = r[2] | r[3] << 8;
         if (pos + 8 + len + 4 > n || (uint32_t)(r[0] | r[1] << 8) != sim_objs[i] || len > PLAT_STORE_MAX)
@@ -721,7 +725,7 @@ static int sim_restore(const char *path)          /* 0, or backup.c's RS_E_*: 10
     pos = 16;
     for (int i = 0; i < SIM_NOBJ; i++) {
         const uint8_t *r = sim_img + pos;
-        uint32_t o = sim_objs[i], len = r[2] | r[3] << 8;
+        uint32_t o = sim_objs[i], len = i < k ? (uint32_t)(r[2] | r[3] << 8) : 0u;
         memcpy(store[o], r + 8, len);
         store_len[o] = len ? (int)len : -1;       /* (an empty object: none, as storage.c's st_load) */
         pos += 8 + len;
@@ -1468,6 +1472,26 @@ int main(int argc, char **argv)
                 fseek(bf, n / 2, SEEK_SET);
                 fputc(ch ^ 1, bf);
                 fclose(bf);
+            }
+        } else if (!strcmp(cmd, "backup_trim")) {     /* only a backup file's first N objects (an earlier version's) */
+            FILE *bf;
+            size_t n = 0, pos = 16;
+            int k = atoi(b);
+            out_path(out, sizeof out, dir, a);
+            if ((bf = fopen(out, "rb"))) {
+                n = fread(sim_img, 1, sizeof sim_img, bf);
+                fclose(bf);
+            }
+            if (n >= 16u && k >= 1 && k <= sim_img[6]) {
+                for (int i = 0; i < k; i++)
+                    pos += 8u + (size_t)(sim_img[pos + 2] | sim_img[pos + 3] << 8);
+                sim_img[6] = (uint8_t)k, sim_img[7] = 0;
+                sim_wr32(sim_img + 12, sim_crc32(0, sim_img, 12));
+                sim_wr32(sim_img + pos, sim_crc32(0, sim_img, pos));
+                if ((bf = fopen(out, "wb"))) {
+                    fwrite(sim_img, 1, pos + 4, bf);
+                    fclose(bf);
+                }
             }
 #endif
         } else if (!strcmp(cmd, "echo"))
