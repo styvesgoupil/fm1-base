@@ -28,7 +28,8 @@
  *      erased, the payload programmed, read back and checked) WITHOUT its header: storage.c's header is the commit
  *      record of a copy, so a copy without one does not exist for st_load: the current set stays in charge;
  *   3. everything received and verified (a cut cable, a changed byte, a refused write: stops here, nothing changed):
- *      asks on the screen, RESTORE FROM USB? SEL yes / HOME no (60 s: no), stopped only;
+ *      asks on the screen, RESTORE FROM USB? SEL yes / HOME no (60 s: no; the app may choose the two buttons and
+ *      draw the question: app.h APP_BACKUP_YES, APP_BACKUP_NO, APP_BACKUP_ASK), stopped only;
  *   4. yes: commits. A journal record (RS_REC, in the update's staging area, unused but by an update) lists the
  *      headers to write; written and read back first, then the headers, then the record erased. A power loss after
  *      the record is valid is finished at the next boot (rs_boot: the headers written again, idempotent on NOR);

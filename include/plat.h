@@ -215,6 +215,9 @@ uint32_t plat_xruns(void);
  *   APP_BACKUP_OBJS {OBJ_PROJ, ...}   the objects, in order (not OBJ_PANEL: the calibration is the unit's)
  *   APP_BACKUP_MAGIC 0x...u           its image's magic (4 ASCII bytes, little-endian), APP_BACKUP_VERSION its format
  *   APP_BACKUP_WHAT "replaces all songs"   the restore question's second line
+ *   APP_BACKUP_YES B_SEL, APP_BACKUP_YES_NAME "SEL"; APP_BACKUP_NO B_HOME, APP_BACKUP_NO_NAME "HOME"   its two buttons
+ *                                     (these by default), the only lights on while it waits
+ *   APP_BACKUP_ASK                    the app draws the question itself: void app_backup_ask_screen(void)
  * and these: int app_backup_playing(void) (1: no restore now, STOP FIRST), void app_backup_flush(void) (what is not
  * saved yet, saved: a backup starts), void app_backup_hold(int on) (no saving while a backup streams),
  * void app_backup_restored(void) (everything from the flash again) */

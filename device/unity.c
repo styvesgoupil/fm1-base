@@ -281,19 +281,35 @@ static void rs_show(uint32_t pct)
     draw_text_box(0, 92, 240, &FONT_S, "RESTORE", C_WHITE, 1);
     draw_text_box(0, 124, 240, &FONT_S, b, C_HI, 1);
 }
-static int rs_ask(void)                             /* SEL yes, HOME no; playing or 60 s: no. The hand's buttons only */
+/* the question's two buttons (app.h APP_BACKUP_YES, APP_BACKUP_NO: SEL and HOME unless the app says), the only lights
+ * on while it waits; its screen the app's if it draws one (APP_BACKUP_ASK: app_backup_ask_screen), else these lines */
+#ifndef APP_BACKUP_YES
+#define APP_BACKUP_YES B_SEL
+#define APP_BACKUP_YES_NAME "SEL"
+#endif
+#ifndef APP_BACKUP_NO
+#define APP_BACKUP_NO B_HOME
+#define APP_BACKUP_NO_NAME "HOME"
+#endif
+static int rs_ask(void)                             /* yes, no; playing or 60 s: no. The hand's buttons only */
 {
     uint32_t t0 = fm1_ms, was = plat_buttons() & ~mirror_in_buttons() & ~remote.btn;
-    rs_screen("RESTORE FROM USB?", "SEL yes   HOME no");
+#ifdef APP_BACKUP_ASK
+    app_backup_ask_screen();
+#else
+    rs_screen("RESTORE FROM USB?", APP_BACKUP_YES_NAME " yes   " APP_BACKUP_NO_NAME " no");
     draw_text_box(0, 156, 240, &FONT_S, APP_BACKUP_WHAT, C_GRAY, 1);
-    ann_say("Restore from USB? It " APP_BACKUP_WHAT ". SEL: yes. HOME: no.", 0, ANN_NOW | ANN_KEEP);
+#endif
+    plat_lights(1u << APP_BACKUP_YES | 1u << APP_BACKUP_NO, 0, 0, 0, 0);
+    ann_say("Restore from USB? It " APP_BACKUP_WHAT ". " APP_BACKUP_YES_NAME ": yes. " APP_BACKUP_NO_NAME ": no.", 0,
+            ANN_NOW | ANN_KEEP);
     while (fm1_ms - t0 < 60000u) {
         uint32_t b = plat_buttons() & ~mirror_in_buttons() & ~remote.btn, down = b & ~was;
         fm1_wdt_feed();
         was = b;
-        if (down >> B_SEL & 1u)
+        if (down >> APP_BACKUP_YES & 1u)
             return 1;
-        if ((down >> B_HOME & 1u) || rs_playing())
+        if ((down >> APP_BACKUP_NO & 1u) || rs_playing())
             return 0;
     }
     return 0;
