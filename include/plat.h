@@ -196,6 +196,8 @@ uint32_t plat_xruns(void);
  *   APP_LOOP        void app_loop(void)           every pass of the main loop (a radio's tasks)
  *   APP_YIELD       void app_yield(void)          from plat_yield, inside long work
  *   APP_OVERLOAD    void app_overload(void)       the render took over 90 % of its time (shed voices)
+ *   APP_LOG_WORD    uint32_t app_log_word(void)   a word of the app's on the log's render line ("app <hex>", after
+ *                                                 "late"; tools/fm1_remote.py log): what it sheds, say. Main loop
  *   APP_SPLASH      void app_splash(void)         the first screen at boot, instead of the name
  *   APP_GAIN(m)     the render's gain from MASTER's position m (0..4096; default the square, m * m >> 12)
  *   APP_QUIET       void app_quiet(int32_t *lr, uint32_t n)   the render while the flash must not be read (the

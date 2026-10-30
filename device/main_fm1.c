@@ -353,13 +353,22 @@ static int log_frame(const uint8_t *p, uint32_t n)
         t5_gap_max = t5_late = t5_run_max = lock_max = 0;
     }
     {                                                /* the render: its load (%, smoothed), its longest since the last
-                                                      * log and its time (us), the halves it was late */
-        static const char *const L[4] = {"audio ", " max ", "of ", " late "};
-        const uint32_t v[4] = {(fm1b_dbg.cpu_q8 * 100u) >> 8, fm1b_dbg.max_us,
-                               (uint32_t)(HALF_FRAMES * 1000000ull / 44100u), fm1b_dbg.late};
+                                                      * log and its time (us), the halves it was late; APP_LOG_WORD:
+                                                      * a word of the app's after them (what it sheds, say) */
+#ifdef APP_LOG_WORD
+#define LOG_NW 5u
+        static const char *const L[LOG_NW] = {"audio ", " max ", "of ", " late ", " app "};
+        const uint32_t v[LOG_NW] = {(fm1b_dbg.cpu_q8 * 100u) >> 8, fm1b_dbg.max_us,
+                                    (uint32_t)(HALF_FRAMES * 1000000ull / 44100u), fm1b_dbg.late, app_log_word()};
+#else
+#define LOG_NW 4u
+        static const char *const L[LOG_NW] = {"audio ", " max ", "of ", " late "};
+        const uint32_t v[LOG_NW] = {(fm1b_dbg.cpu_q8 * 100u) >> 8, fm1b_dbg.max_us,
+                                    (uint32_t)(HALF_FRAMES * 1000000ull / 44100u), fm1b_dbg.late};
+#endif
         uint32_t i;
         q = b;
-        for (i = 0; i < 4u; i++) {
+        for (i = 0; i < LOG_NW; i++) {
             const char *l = L[i];
             if (i == 2u) {                           /* two lines: a frame holds ~40 characters */
                 *q = 0;
