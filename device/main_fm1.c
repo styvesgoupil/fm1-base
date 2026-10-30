@@ -352,6 +352,30 @@ static int log_frame(const uint8_t *p, uint32_t n)
         log_line_send(b);
         t5_gap_max = t5_late = t5_run_max = lock_max = 0;
     }
+    {                                                /* the render: its load (%, smoothed), its longest since the last
+                                                      * log and its time (us), the halves it was late */
+        static const char *const L[4] = {"audio ", " max ", "of ", " late "};
+        const uint32_t v[4] = {(fm1b_dbg.cpu_q8 * 100u) >> 8, fm1b_dbg.max_us,
+                               (uint32_t)(HALF_FRAMES * 1000000ull / 44100u), fm1b_dbg.late};
+        uint32_t i;
+        q = b;
+        for (i = 0; i < 4u; i++) {
+            const char *l = L[i];
+            if (i == 2u) {                           /* two lines: a frame holds ~40 characters */
+                *q = 0;
+                log_line_send(b);
+                q = b;
+            }
+            while (*l)
+                *q++ = *l++;
+            hexs(q, v[i]);
+            q += 8;
+        }
+        *q = 0;
+        log_line_send(b);
+        fm1b_dbg.max_us = 0;
+        fm1b_dbg.late = 0;
+    }
 #if FM1B_BLE
     {
         extern uint32_t shim_off_max, shim_off_from;
