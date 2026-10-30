@@ -189,6 +189,10 @@ int plat_store_save(uint32_t obj, const void *src, uint32_t len);   /* 0 = ok */
 /* audio load in % of the render budget, and xruns since boot (device: from the ISR) */
 uint32_t plat_cpu_pct(void);
 uint32_t plat_xruns(void);
+/* a free-running count, PLAT_TICKS_US a microsecond (it wraps every three minutes): for timing a piece of code, in
+ * the render too (device: TIMER4's; host: the monotonic clock's, at the same rate) */
+#define PLAT_TICKS_US 24u
+uint32_t plat_ticks(void);
 
 /* the app's optional hooks (app.h defines the macro when it has the function):
  *   APP_TICK        void app_tick(void)           1 kHz, in the timer interrupt (a clock, a sequencer)

@@ -867,6 +867,7 @@ static double now_ns(void)
     clock_gettime(CLOCK_MONOTONIC, &t);
     return (double)t.tv_sec * 1e9 + (double)t.tv_nsec;
 }
+uint32_t plat_ticks(void) { return (uint32_t)(uint64_t)(now_ns() * (PLAT_TICKS_US / 1000.0)); }
 
 static void boot(void)
 {
