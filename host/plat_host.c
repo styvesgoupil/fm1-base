@@ -1516,7 +1516,7 @@ int main(int argc, char **argv)
     if (mr_out)
         fclose(mr_out);
 #endif
-    printf("host: %u ms simulated, %u blits, render %.1f%% of real time (host CPU)%s\n", now_ms, blits,
+    printf("host: %u ms simulated, %u blits, render %.3f%% of real time (host CPU)%s\n", now_ms, blits,
            render_budget_ns_total > 0 ? 100.0 * render_ns_total / render_budget_ns_total : 0.0,
            fails ? ", EXPECTATIONS FAILED" : "");
     return fails ? 1 : 0;
