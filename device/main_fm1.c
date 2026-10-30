@@ -27,6 +27,7 @@ static uint32_t wdt_stage __attribute__((section(".noinit")));   /* the main loo
                                                                   * 2 Bluetooth, 3 the app's loop, 4 USB, 5 a frame,
                                                                   * 6 input (fm1b_dbg.stage) */
 
+static float spk_g = 1.0f;                          /* the speaker's gain, gliding (plat_speaker) */
 static void render_block(int32_t *o)                /* ALNK0: one half, measured */
 {
     uint32_t t0 = fm1_ticks(), us, budget = HALF_FRAMES * 1000000u / FS;
@@ -72,6 +73,17 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
                 for (i = 0; i < 2u * REND_FRAMES; i++)
                     o[2u * k + i] = (int32_t)((float)o[2u * k + i] * g);
             }
+            if (spk_off || spk_g < 1.0f) {          /* SPEAKER off (plat_speaker): the speaker and headphones faded
+                                                     * out in some 6 ms, after the tap, and back in */
+                const float to = spk_off ? 0.0f : 1.0f;
+                uint32_t i;
+                for (i = 0; i < REND_FRAMES; i++) {
+                    float d = to - spk_g;
+                    spk_g += d > 1.0f / 256.0f ? 1.0f / 256.0f : d < -1.0f / 256.0f ? -1.0f / 256.0f : d;
+                    o[2u * (k + i)] = (int32_t)((float)o[2u * (k + i)] * spk_g);
+                    o[2u * (k + i) + 1u] = (int32_t)((float)o[2u * (k + i) + 1u] * spk_g);
+                }
+            }
         }
     }
     us = (fm1_ticks() - t0) / FM1_TICKS_PER_US;
@@ -110,9 +122,6 @@ static void audio_init(void)
     for (i = 0; i < 2u * HALF_WORDS; i++)
         abuf[i] = 0;
     fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3);
-    spk_up = 1;                                     /* (the app's SPEAKER, chosen before: plat_speaker) */
-    if (spk_off)
-        speaker_apply();
 }
 
 static void audio_silence(void)                     /* IRQs off (flash erase): the DMA would loop stale audio */

@@ -163,7 +163,8 @@ void plat_host_patience(uint32_t try_ms, uint32_t total_ms);   /* each try's wai
  * speaker and headphones only; 0, both at MASTER (the default) */
 void plat_usb_audio_full(int on);
 
-/* the speaker: 0, the FM-1's own output quiet (its codec's line), the USB audio input going on; 1, as at power-on */
+/* the speaker: 0, the FM-1's own output (the speaker and the headphones) faded out, the USB audio input going on; 1,
+ * as at power-on */
 void plat_speaker(int on);
 
 /* the keys' velocity and pressure (an app with APP_KEY_SENSE): on, the scan reads the keys on the analog rows and
