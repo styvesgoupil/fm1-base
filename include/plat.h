@@ -150,6 +150,9 @@ const uint8_t *plat_data(uint32_t off);   /* read in place; 0 = outside the wind
 int plat_data_erase(uint32_t off);        /* the 4 KiB sector at off (aligned); 0 = done */
 int plat_data_write(uint32_t off, const void *src, uint32_t n);   /* into erased flash, src in RAM; 0 = done */
 void plat_sysex_send(const uint8_t *frame, uint32_t n);   /* a whole SysEx frame (F0 .. F7) out over USB */
+int plat_sysex_try(const uint8_t *frame, uint32_t n);    /* the same, only if it fits now: never waits (nobody
+                                        * reading, suspended, a backup or another frame on the wire): 0 = sent whole,
+                                        * else nothing sent (a stream the app repeats: its next frame) */
 
 /* the app's own commands in the update's SysEx framing (F0 pack7(00 59 cmd len24 body ~sum) F7: felucca-bsp ota.c),
  * an app with APP_USB_CMD: app_usb_cmd(d, n) gets each frame whose cmd the platform does not take (d: the decoded

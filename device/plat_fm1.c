@@ -136,6 +136,8 @@ void plat_unlock(uint32_t f)
     }
 }
 void plat_sysex_send(const uint8_t *frame, uint32_t n) { ota_wire_send(frame, n); }
+int plat_sysex_try(const uint8_t *frame, uint32_t n) { return ann_wire_send(frame, n); }   /* (the screen reader's: room
+                                                                                   * for it whole, or not at all) */
 
 /* the data area and its two more windows (plat.h): read through the unencrypted XIP window (main_fm1.c
  * fl_plain_window_init, from 0x93000 up); erased and written by felucca-bsp's RAM driver (FL_RANGE_OK: the store, its

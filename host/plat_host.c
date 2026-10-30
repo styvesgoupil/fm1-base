@@ -475,6 +475,7 @@ int plat_data_write(uint32_t off, const void *src, uint32_t n)
     return 0;
 }
 void plat_sysex_send(const uint8_t *frame, uint32_t n) { (void)frame, (void)n; }
+int plat_sysex_try(const uint8_t *frame, uint32_t n) { (void)frame, (void)n; return 0; }
 /* no host to pull from (an app's transfer is tested on its own, or by writing the flash: "data") */
 int plat_host_read(uint32_t addr, uint8_t *dst, uint32_t n) { (void)addr, (void)dst, (void)n; return -1; }
 void plat_host_patience(uint32_t try_ms, uint32_t total_ms) { (void)try_ms, (void)total_ms; }
