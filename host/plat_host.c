@@ -480,6 +480,7 @@ int plat_host_read(uint32_t addr, uint8_t *dst, uint32_t n) { (void)addr, (void)
 void plat_host_patience(uint32_t try_ms, uint32_t total_ms) { (void)try_ms, (void)total_ms; }
 static int uac_full;                            /* plat_usb_audio_full: the render at full level, MASTER after it */
 void plat_usb_audio_full(int on) { uac_full = on != 0; }
+void plat_speaker(int on) { (void)on; }        /* no speaker of its own here (the app's tests read its setting) */
 
 /* flash: one buffer per object, kept across a simulated reboot */
 static uint8_t store[OBJ_NOBJ][PLAT_STORE_MAX];

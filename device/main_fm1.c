@@ -110,6 +110,9 @@ static void audio_init(void)
     for (i = 0; i < 2u * HALF_WORDS; i++)
         abuf[i] = 0;
     fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3);
+    spk_up = 1;                                     /* (the app's SPEAKER, chosen before: plat_speaker) */
+    if (spk_off)
+        speaker_apply();
 }
 
 static void audio_silence(void)                     /* IRQs off (flash erase): the DMA would loop stale audio */

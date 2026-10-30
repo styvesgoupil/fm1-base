@@ -167,6 +167,21 @@ void plat_host_patience(uint32_t try_ms, uint32_t total_ms)
 /* USB audio full: the render at full level for the USB audio input, MASTER after it (main_fm1.c render_block) */
 static volatile uint8_t uac_full;
 void plat_usb_audio_full(int on) { uac_full = (uint8_t)(on != 0); }
+/* the speaker (plat_speaker): PC6, the codec's line that fm1_audio_init raises once the audio runs. Low, the FM-1's
+ * own output is quiet; the USB audio input, tapped before it, goes on. The choice waits for the audio (audio_init) */
+static uint8_t spk_off, spk_up;
+static void speaker_apply(void)
+{
+    uint32_t f = plat_lock();                     /* (port C read-modify-written: the screen's lines too) */
+    fm1_audio_line(!spk_off);
+    plat_unlock(f);
+}
+void plat_speaker(int on)
+{
+    spk_off = (uint8_t)!on;
+    if (spk_up)
+        speaker_apply();
+}
 void plat_yield(void)
 {
     ble_poll();                                   /* Bluetooth: its notifications go out while the screen draws */
