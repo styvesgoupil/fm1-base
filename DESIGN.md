@@ -50,7 +50,7 @@ groups it needs, and only those are compiled in.
 | second core | `plat_cpu2_*` | X0X, NuSaw, SPH-16, XY-1 |
 | analog keys | `plat_analog_*`, `plat_cap_probe`, `plat_sense` | Velo, MONK-1, CTL-1 |
 | profiling | `plat_cycles*`, `plat_stalls*`, `plat_cpu_peak_pct`, `plat_irq_stack_*`, `plat_ticks24` | X0X, SPH-16, XY-1 |
-| power | `plat_battery`, `plat_vdc14_mv`, `plat_sysvdd_mv` | X0X, SPH-16, NuSaw, XY-1 |
+| power | `plat_battery`, `plat_vdc14_mv`, `plat_sysvdd_mv` | X0X, SPH-16, NuSaw, XY-1; FRASIL (`plat_battery`: the divider's reading, 0..1023, a sample a second) |
 | crash | `plat_last_crash` | X0X, SPH-16, NuSaw, XY-1 |
 | Bluetooth | `plat_ble_*` | CTL-1 |
 | concurrency | `plat_lock`, `plat_unlock`, `plat_yield`, `plat_idle` | CTL-1, Mocky |

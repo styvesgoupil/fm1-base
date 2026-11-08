@@ -44,6 +44,30 @@ static volatile uint32_t master_pos = 2048;   /* MASTER's position, 0..4096 (mai
                                                * or the mirror's when they set it) */
 uint32_t plat_master(void) { return master_pos; }
 
+/* the battery: its divider on PB1 (FM1_ADC_BATT), a sample a second from the main loop (batt_poll). While the keys'
+ * readings are on (plat_sense) the converter is the scan's: it stops starting conversions a moment (con 0), the one
+ * under way is taken at its next tick, the battery's is read, then the scan has it again. The keys miss a reading or
+ * two, never get a wrong one; MASTER keeps its last */
+static volatile int32_t batt_raw = -1;
+static uint32_t batt_at;
+int32_t plat_battery(void) { return batt_raw; }
+static void batt_poll(uint32_t now)
+{
+    uint32_t con = fm1_an.con, t0;
+    int32_t a;
+    if (batt_raw >= 0 && now - batt_at < 1000u)
+        return;
+    batt_at = now;
+    fm1_an.con = 0;
+    t0 = fm1_ticks();
+    while (fm1_an.pend && fm1_ticks() - t0 < 500u * FM1_TICKS_PER_US)   /* (a tick, 100 us, takes it) */
+        ;
+    a = fm1_an.pend ? -1 : fm1_adc_read(FM1_ADC_BATT);
+    fm1_an.con = (uint16_t)con;
+    if (a >= 0)
+        batt_raw = a;
+}
+
 /* LEDs: the picture is built off-line and copied one byte per column (Felucca: clearing
  * and relighting would let the 10 kHz scan catch the dark gap and flicker) */
 static uint8_t led_pos[FM1_NKEY];

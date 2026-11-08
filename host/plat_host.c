@@ -17,6 +17,7 @@
  *   turn ENC N [MS]              (ENC: SELECT ALGO PRESET K1 K2 K3 K4; N detents, MS apart, default 80)
  *   spin ENC N                   N detents at once, exactly N (no acceleration)
  *   master N                     MASTER pot 0..4096 (then 40 ms, as the device's smoothing settles)
+ *   battery N                    the battery's divider reads N, 0..1023 (plat_battery); -1: none (as at the start)
  *   midi [PORT] B0 B1 B2         incoming MIDI message (PORT: USB, the default, BLE or TRS; hex bytes)
  *   ble connect | ble link | ble disconnect   a central listening, or linked and not yet listening (FM1B_BLE: the
  *                                stand-in stack is ready a second after the start)
@@ -165,6 +166,8 @@ int32_t plat_enc(int role)
     return v;
 }
 uint32_t plat_master(void) { return mirror_in_master(master); }
+static int32_t host_batt = -1;           /* the battery's reading (the script's battery N), -1 none */
+int32_t plat_battery(void) { return host_batt; }
 /* the lights ("leds"): bright, and dim (glow 0: none); PLAY's green counts as PLAY */
 void plat_lights(uint32_t b, uint32_t k, uint32_t db, uint32_t dk, int glow)
 {
@@ -1280,6 +1283,9 @@ int main(int argc, char **argv)
         } else if (!strcmp(cmd, "master")) {
             master = (uint32_t)atoi(a);
             run_ms(40);                         /* as the device's smoothing settles */
+        } else if (!strcmp(cmd, "battery")) {
+            host_batt = atoi(a) < 0 ? -1 : atoi(a) > 1023 ? 1023 : atoi(a);
+            run_ms(1);
         } else if (!strcmp(cmd, "midi")) {
             int p = find_name(PORT_N, NPORTS, a);
             min_q[mi_w % MQ] = p < 0 ? mk_pkt(a, b, c) : mk_pkt(b, c, d);

@@ -828,6 +828,7 @@ static void fm1_main(void)
                 master_pos = mirror_in_master(remote.master >= 0 ? (uint32_t)remote.master : (uint32_t)(knob / 4));
             }
         }
+        batt_poll(fm1_ms);                          /* the battery, a sample a second (plat_battery) */
         fm1b_dbg.stage = 2;                         /* (breadcrumbs: where a watchdog reset found the loop) */
         ble_poll();                                 /* Bluetooth's tasks, once started */
 #if FM1B_WIFI
