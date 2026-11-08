@@ -780,7 +780,8 @@ static void fm1_main(void)
                                                     /* then 1.38 V (fm1_sys.h). At the boot loader's, flash fetches
                                                      * come back corrupted under load: the radio's trim crashed
                                                      * CTL-1 0.6 s into most Bluetooth starts */
-        flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;   /* the expected 1 MiB part, else RAM only */
+        flash_ok = fm1_flash_known(FL_FAR(fl_jedec_ram)());   /* a part an FM-1 ships with (the Puya, the */
+                                                    /* UC25HQ80: bsp chip/fm1_flash_ext.h), else RAM only */
         irq_restore(f);
         if (flash_ok) {
 #if FM1B_BACKUP
