@@ -131,6 +131,36 @@ static void audio_silence(void)                     /* IRQs off (flash erase): t
         abuf[i] = 0;
 }
 
+/* the battery's sample (plat_battery), from the main loop, a second apart (attempts, not successes). While the keys'
+ * readings are on (plat_sense: the main loop's alone) the converter is the scan's: it stops starting conversions a
+ * moment (con 0), the one under way is taken at its next tick, the battery's is read, then the scan has it again.
+ * Begun just after a render ends (fm1b_dbg.halves moved: at the most loaded, the next ~1 ms away), so no render
+ * stretches that moment: ~0.4 ms, a key's reading or two missed, never a wrong one; MASTER keeps its last. (No audio:
+ * after 8 ms anyway) */
+static uint32_t batt_at;
+static void batt_poll(uint32_t now)
+{
+    volatile uint32_t *halves = &fm1b_dbg.halves;
+    uint32_t con, t0, h;
+    int32_t a;
+    if (batt_at && now - batt_at < 1000u)
+        return;
+    batt_at = now | 1u;
+    h = *halves;
+    t0 = fm1_ticks();
+    while (*halves == h && fm1_ticks() - t0 < 8000u * FM1_TICKS_PER_US)
+        ;
+    con = fm1_an.con;
+    fm1_an.con = 0;
+    t0 = fm1_ticks();
+    while (fm1_an.pend && fm1_ticks() - t0 < 500u * FM1_TICKS_PER_US)   /* (a tick, 100 us, takes it) */
+        ;
+    a = fm1_an.pend ? -1 : fm1_adc_read(FM1_ADC_BATT);
+    fm1_an.con = (uint16_t)con;
+    if (a >= 0)
+        batt_raw = a;
+}
+
 /* ------------------------------------------------------------ timer --- */
 static uint8_t usb_due;
 static uint32_t t5_gap_max, t5_late, t5_run_max;                /* the longest gap between ticks (us), and gaps over 300 us:
