@@ -110,7 +110,10 @@ static void smk_main_poll(void)                    /* the main loop: K5, the whe
             smk_level = want;
         master_pos = (uint32_t)(smk_level / 16);
     }
-    if (smk_master_t && fm1_ms - smk_master_t >= SMK_MASTER_SAVE_MS) {
+    if (smk_master_t && (int32_t)(fm1_ms - smk_master_t) >= (int32_t)SMK_MASTER_SAVE_MS) {   /* (signed: the mark is fm1_ms | 1,
+                                                    * a millisecond ahead half the time; unsigned, that wrapped to a huge
+                                                    * age and the level was written to the flash at each step of K5 or
+                                                    * a fader, the audio held up meanwhile: late halves, crackles, cuts) */
         smk_master_t = 0;
         if (panel.master != (uint32_t)smk_master) {
             panel.master = (uint32_t)smk_master;
