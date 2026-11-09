@@ -420,8 +420,8 @@ static int rs_commit(void)
 #ifdef APP_STORE_POOL
 /* the pool's restore, after the question: the copies of every pooled object the backup holds erased (a pooled object
  * it does not, the radio's keys say, kept), then each object of the image (fetched again, each record's CRC checked
- * again) saved; 0 = done */
-static int rs_rewrite(void)
+ * again) saved; the objects past the image's n (an earlier version's backup, fewer) saved absent; 0 = done */
+static int rs_rewrite(uint32_t n_img)
 {
     uint32_t pos = BU_HEAD, i, k;
     (void)rs_stage;                                   /* (the A/B pairs' staging and commit: not a pool's) */
@@ -432,6 +432,11 @@ static int rs_rewrite(void)
     for (i = 0; i < BU_NOBJ; i++) {
         uint8_t r[BU_REC];
         uint32_t len, crc;
+        if (i >= n_img) {                             /* (one it did not have yet: absent) */
+            if (st_save(bu_obj(i), bu_buf, 0))
+                return RS_E_PROG;
+            continue;
+        }
         if (rs_fetch(pos, r, BU_REC))
             return RS_E_FETCH;
         pos += BU_REC;
@@ -533,8 +538,10 @@ static int restore_rx(uint32_t len, uint32_t crc, int *begun_out)
         e->obj = (uint16_t)bu_obj(i);
         e->len = 0;
         e->crc = bu_crc(0, bu_buf, 0);
+#ifndef APP_STORE_POOL                                /* (the pool's: rs_rewrite saves them absent) */
         if ((rc = rs_stage(e)) != 0)
             goto out;
+#endif
     }
     {
         uint8_t t[4];
@@ -562,7 +569,7 @@ static int restore_rx(uint32_t len, uint32_t crc, int *begun_out)
     }
     rs_show(95);
 #ifdef APP_STORE_POOL
-    if ((rc = rs_rewrite()) != 0) {
+    if ((rc = rs_rewrite(n)) != 0) {
         rs_reload();                                  /* (part written: what the flash holds now) */
         goto out;
     }
