@@ -717,12 +717,12 @@ static int log_frame(const uint8_t *p, uint32_t n)
 #ifdef APP_LOG_WORD
 #define LOG_NW 5u
         static const char *const L[LOG_NW] = {"audio ", " max ", "of ", " late ", " app "};
-        const uint32_t v[LOG_NW] = {(fm1b_dbg.cpu_q8 * 100u) >> 8, fm1b_dbg.max_us,
+        const uint32_t v[LOG_NW] = {audio_cpu_pct, fm1b_dbg.max_us,
                                     (uint32_t)(HALF_FRAMES * 1000000ull / 44100u), fm1b_dbg.late, app_log_word()};
 #else
 #define LOG_NW 4u
         static const char *const L[LOG_NW] = {"audio ", " max ", "of ", " late "};
-        const uint32_t v[LOG_NW] = {(fm1b_dbg.cpu_q8 * 100u) >> 8, fm1b_dbg.max_us,
+        const uint32_t v[LOG_NW] = {audio_cpu_pct, fm1b_dbg.max_us,
                                     (uint32_t)(HALF_FRAMES * 1000000ull / 44100u), fm1b_dbg.late};
 #endif
         uint32_t i;
