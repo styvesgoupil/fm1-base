@@ -1168,8 +1168,9 @@ int plat_sysex_send(const uint8_t *frame, uint32_t n)
     hsx_keep(frame, n);
     return 0;
 }
-/* (FRASIL's fork) plat_sysex_send only if the ring takes it now, as the device's */
-int plat_sysex_try(const uint8_t *frame, uint32_t n) { return plat_sysex_room() >= n ? plat_sysex_send(frame, n) : -1; }
+/* (FRASIL's fork) plat_sysex_send's, never waiting: the host's computer reads at once (its ring refuses only with no
+ * session or stalled: "usb unplug | stall"), as the simulator's plat_sysex_try always had it */
+int plat_sysex_try(const uint8_t *frame, uint32_t n) { return plat_sysex_send(frame, n); }
 #if FM1B_RES
 #include "fm1_res_data.h"                             /* fm1b_res_data: the build's resources (build.py, from the file) */
 static int res_there = 1;                             /* (script "res 0": an FM-1 without them) */
