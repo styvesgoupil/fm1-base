@@ -44,6 +44,7 @@ static volatile uint32_t master_pos = 2048;   /* MASTER's position, 0..4096 (mai
                                                * or the mirror's when they set it) */
 uint32_t plat_master(void) { return master_pos; }
 
+#if !PLAT_SMK37                                   /* (the SMK's battery, lights, MASTER: plat_smk37.c) */
 /* the battery: ADC ch3 (its divider), a slow average by the main loop. The stock firmware's thresholds, as X0X, melodee
  * and dxsloop use them, give 0-3 bars; there is no charger line, so a USB host means power */
 static int32_t batt_raw;
@@ -177,6 +178,7 @@ void plat_leds(uint32_t buttons, uint32_t keys)    /* PLAY green, unless red (re
     }
     plat_lights(b, keys, dim, 0, glow_on ? 2 : 0);
 }
+#endif /* !PLAT_SMK37 */
 
 /* the 1 kHz tick (app_tick) runs in the timer interrupt: the main loop locks it out around what they share. The lock
  * nests and restores the interrupts as it found them (plat_lock.c); MIDI sent from the tick itself needs none (nothing
@@ -261,13 +263,14 @@ int plat_sysex_send(const uint8_t *frame, uint32_t n) { return ota_wire_send(fra
  * FL_XDATA windows) */
 _Static_assert(FL_XDATA0_LO == PLAT_XDATA0_LO && FL_XDATA0_HI == PLAT_XDATA0_HI && FL_XDATA1_HI == PLAT_XDATA1_HI &&
                FL_AUTO_LO == PLAT_XDATA1_LO && FL_AUTO_HI == FL_XDATA1_LO, "plat.h's windows are felucca-bsp's");
+_Static_assert(PLAT_STAGE_LO == OTA_AREA && PLAT_STAGE_HI == OTA_AREA + OTA_AREA_LEN, "plat.h's staging is ota.c's");
 #if FM1B_XDATA2                                   /* the fourth window: felucca-bsp's FL_GLOB (in its FL_STORE_OK), the
                                                    * store's objects there refused (plat_xdata2.h) */
 #include "plat_xdata2.h"
 _Static_assert(FL_GLOB_LO == PLAT_XDATA2_LO && FL_GLOB_HI == PLAT_XDATA2_HI, "PLAT_XDATA2 is felucca-bsp's FL_GLOB");
-#define DATA_STORE_HIT(off, n) plat_xdata2_store_hit((off), (n))
+#define DATA_STORE_HIT(off, n) (plat_xdata2_store_hit((off), (n)) || PLAT_RESERVED((off), (n)))
 #else
-#define DATA_STORE_HIT(off, n) 0
+#define DATA_STORE_HIT(off, n) PLAT_RESERVED((off), (n))
 #endif
 const uint8_t *plat_data(uint32_t off)
 {
@@ -403,6 +406,12 @@ void plat_midi_send(uint32_t pkt, uint32_t to)    /* the main loop's and the tic
         ble_midi_tap(pkt, to);
         midi_counted(PORT_BLE, 1, pkt);
     }
+#if PLAT_SMK37 && FM1B_TRS
+    if (to & (TO_USB | TO_TRS)) {                 /* the jack: MIDI OUT, the computer's stream and TO_TRS */
+        trs_out_put(pkt);
+        midi_counted(PORT_TRS, 1, pkt);
+    }
+#endif
     if (!in_tick)
         plat_unlock(f);
 }
@@ -432,6 +441,7 @@ const char *plat_usb_host_name(void) { return ""; }
 #endif
 #endif
 
+#if !PLAT_SMK37
 /* the keys' velocity and pressure (APP_KEY_SENSE): felucca-bsp's analog rows, as fm1-ctl and fm1-monk read them (the
  * converter's clock, a held key driven, the top row probed). Off, the converter is the main loop's (MASTER). */
 void plat_sense(int on)
@@ -458,6 +468,7 @@ uint32_t plat_analog_mask(void)
                 m |= 1u << (FM1_KEYMAP[r][c] - 14);
     return m;
 }
+#endif /* !PLAT_SMK37 */
 
 #if FM1B_WIFI || FM1B_BLE
 const uint8_t *plat_chip_uid(void) { return flash_ok ? flash_uid : 0; }
@@ -503,3 +514,6 @@ const struct plat_cache_ram *plat_cache_ram(void)
 #endif
     return &r;
 }
+#if PLAT_SMK37
+#include "plat_smk37.c"      /* the SMK-37: its controls, lights, MASTER, battery, pad LEDs */
+#endif
