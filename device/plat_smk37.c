@@ -80,10 +80,12 @@ int plat_headphones(void) { return -1; }
 /* MASTER: K5's detents on a virtual level, kept in the panel object */
 static int32_t smk_master = 2896;                  /* half gain, until the panel object or the app says */
 static uint32_t smk_master_t;                      /* the last turn (fm1_ms), 0: nothing to save */
+static int32_t smk_level = 2896 * 16;              /* the level heard, x16: eased toward MASTER's each pass, as the FM-1's
+                                                    * pot is (main_fm1.c knob), so a detent or a fader's step never lands in
+                                                    * the render at once (it crackled: Styves, 2026-11-09) */
 void plat_master_set(uint32_t q12)
 {
-    smk_master = (int32_t)(q12 > 4096u ? 4096u : q12);
-    master_pos = mirror_in_master(remote.master >= 0 ? (uint32_t)remote.master : (uint32_t)smk_master);
+    smk_master = (int32_t)(q12 > 4096u ? 4096u : q12);   /* (heard by the next passes: smk_main_poll eases it in) */
     smk_master_t = fm1_ms | 1u;                    /* kept like a turn of K5 (the save skips a level already there) */
 }
 static void smk_master_load(void)                  /* after panel_init: the level saved with the calibration */
@@ -91,6 +93,7 @@ static void smk_master_load(void)                  /* after panel_init: the leve
     if (panel.master <= 4096u)
         smk_master = (int32_t)panel.master;
     master_pos = (uint32_t)smk_master;
+    smk_level = smk_master * 16;                   /* (at the start: the level saved, no fade in) */
 }
 static void smk_main_poll(void)                    /* the main loop: K5, the wheels, the pedal, the battery's average, the saved master */
 {
@@ -100,7 +103,13 @@ static void smk_main_poll(void)                    /* the main loop: K5, the whe
         smk_master = clamp(smk_master + s * SMK_MASTER_STEP, 0, 4096);
         smk_master_t = fm1_ms | 1u;
     }
-    master_pos = mirror_in_master(remote.master >= 0 ? (uint32_t)remote.master : (uint32_t)smk_master);
+    {
+        int32_t want = (int32_t)mirror_in_master(remote.master >= 0 ? (uint32_t)remote.master : (uint32_t)smk_master) * 16;
+        smk_level += (want - smk_level) / 8;       /* (the FM-1 pot's easing) */
+        if (want - smk_level < 8 && smk_level - want < 8)
+            smk_level = want;
+        master_pos = (uint32_t)(smk_level / 16);
+    }
     if (smk_master_t && fm1_ms - smk_master_t >= SMK_MASTER_SAVE_MS) {
         smk_master_t = 0;
         if (panel.master != (uint32_t)smk_master) {
