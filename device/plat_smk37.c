@@ -18,6 +18,12 @@
 #define SMK_MASTER_STEP 96                         /* a detent of K5 */
 #define SMK_MASTER_SAVE_MS 2000u
 #define SMK_MASTER_ENC 4u                          /* K5 (0-based) */
+#ifdef APP_SMK_MASTER_FADER
+#define SMK_MASTER_KNOB 0                          /* the app's fader is MASTER (plat_master_set at its moves and at the
+                                                    * start): K5 an encoder like the others, the level never written */
+#else
+#define SMK_MASTER_KNOB 1
+#endif
 _Static_assert(FM1_TRIM_BASE == FL_USRTRIM, "the input layer reads the calibration record where the flash map puts it");
 _Static_assert(FL_DATA_LO == PLAT_DATA_LO && FL_DATA_HI == PLAT_DATA_HI, "plat.h's data window is the SMK's");
 _Static_assert(FL_OWNER == PLAT_OWNER, "plat.h's owner sector is the SMK's (plat_data_erase / plat_data_write refuse it)");
@@ -86,7 +92,8 @@ static int32_t smk_level = 2896 * 16;              /* the level heard, x16: ease
 void plat_master_set(uint32_t q12)
 {
     smk_master = (int32_t)(q12 > 4096u ? 4096u : q12);   /* (heard by the next passes: smk_main_poll eases it in) */
-    smk_master_t = fm1_ms | 1u;                    /* kept like a turn of K5 (the save skips a level already there) */
+    if (SMK_MASTER_KNOB)
+        smk_master_t = fm1_ms | 1u;                /* kept like a turn of K5 (the save skips a level already there) */
 }
 static void smk_master_load(void)                  /* after panel_init: the level saved with the calibration */
 {
@@ -97,7 +104,7 @@ static void smk_master_load(void)                  /* after panel_init: the leve
 }
 static void smk_main_poll(void)                    /* the main loop: K5, the wheels, the pedal, the battery's average, the saved master */
 {
-    int32_t s = fm1_enc_take(SMK_MASTER_ENC);
+    int32_t s = SMK_MASTER_KNOB ? fm1_enc_take(SMK_MASTER_ENC) : 0;   /* (a fader the MASTER: K5 is a role's) */
     smk_analog_poll();
     if (s) {
         smk_master = clamp(smk_master + s * SMK_MASTER_STEP, 0, 4096);
@@ -110,7 +117,7 @@ static void smk_main_poll(void)                    /* the main loop: K5, the whe
             smk_level = want;
         master_pos = (uint32_t)(smk_level / 16);
     }
-    if (smk_master_t && (int32_t)(fm1_ms - smk_master_t) >= (int32_t)SMK_MASTER_SAVE_MS) {   /* (signed: the mark is fm1_ms | 1,
+    if (SMK_MASTER_KNOB && smk_master_t && (int32_t)(fm1_ms - smk_master_t) >= (int32_t)SMK_MASTER_SAVE_MS) {   /* (signed: the mark is fm1_ms | 1,
                                                     * a millisecond ahead half the time; unsigned, that wrapped to a huge
                                                     * age and the level was written to the flash at each step of K5 or
                                                     * a fader, the audio held up meanwhile: late halves, crackles, cuts) */

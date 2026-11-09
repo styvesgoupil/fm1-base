@@ -12,7 +12,11 @@
 static const char *const B_NAME[NB] = {"FX", "SCALE", "CHORD", "REPEAT", "PARA", "GLOBE", "PATCH", "BT",
                                         "ARP", "SEQ", "SEQ PLAY", "SEQ REC", "OCTAVE-", "OCTAVE+",
                                         "KBANK", "FBANK", "<", ">"};
+#ifdef APP_SMK_MASTER_FADER
+#define PANEL_ENC_RESERVED 0u            /* the app's fader is MASTER: K5 a role's (PRESETS) */
+#else
 #define PANEL_ENC_RESERVED (1u << 4)     /* K5: the virtual MASTER's knob */
+#endif
 #else
 static const char *const B_NAME[NB] = {"FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE",
                                         "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+"};
@@ -21,7 +25,12 @@ static const char *const B_NAME[NB] = {"FX", "SEL", "ENV", "LFO", "EDIT", "GLO",
 static const char *const E_NAME[NE] = {"SELECT", "ALGORITHM", "PRESETS", "KNOB 1", "KNOB 2",
                                         "KNOB 3", "KNOB 4"};
 #if PLAT_SMK37
+#ifdef APP_SMK_MASTER_FADER
+#define PANEL_MAGIC 0x50414E37u          /* "PAN7": the SMK's layout, PRESETS on K5, MASTER the app's fader (a PAN6 taught
+                                          * or saved before: the defaults again) */
+#else
 #define PANEL_MAGIC 0x50414E36u          /* "PAN6": the SMK's layout (18 buttons, 8 encoders, the master) */
+#endif
 #else
 #define PANEL_MAGIC 0x50414E35u          /* "PAN5": Felucca's layout, so its calibration stays valid */
 #endif
@@ -41,7 +50,11 @@ panel_t panel __attribute__((section(".noinit")));
 static const panel_t PANEL_DEFAULT = {   /* the SMK's ids (felucca-bsp boards/smk37/fm1_input.h FM1_BTN, K1..K8) */
     PANEL_MAGIC,
     {14, 8, 9, 7, 13, 10, 12, 11, 6, 15, 16, 17, 4, 5, 0, 1, 2, 3},
+#ifdef APP_SMK_MASTER_FADER
+    {5, 6, 4, 0, 1, 2, 3},                       /* (PRESETS on K5, K8 free) */
+#else
     {5, 6, 7, 0, 1, 2, 3},
+#endif
     {1, 1, 1, 1, 1, 1, 1},
     2896u,                                       /* half gain: the level a firmware starts at on the FM-1 */
 };
