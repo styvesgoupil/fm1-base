@@ -414,8 +414,8 @@ static void rs_show(uint32_t pct)
  * while the question waits, dark after; a hit at any velocity */
 static void rs_pads(int on)
 {
-    plat_pad_rgb(1, on ? 0x00FF00u : 0u);
-    plat_pad_rgb(0, on ? 0xFF0000u : 0u);
+    plat_pad_rgb(1, on ? 0x008000u : 0u);   /* (half: as FRASIL's, full too bright on stage) */
+    plat_pad_rgb(0, on ? 0x800000u : 0u);
     smk_pads_flush();
 }
 static int rs_ask_wait(void);
