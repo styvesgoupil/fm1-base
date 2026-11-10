@@ -7,7 +7,9 @@
  *
  * MASTER: the FM-1's pot is K5, an encoder, here: a virtual master, 0..4096 in steps of SMK_MASTER_STEP a detent,
  * kept in the panel calibration object (OBJ_PANEL, saved SMK_MASTER_SAVE_MS after the last turn), so it survives
- * power-off; plat_master_set lets an app put its own saved level there at start.
+ * power-off; plat_master_set lets an app put its own saved level there at start. An app that owns MASTER
+ * (APP_SMK_MASTER_APP) sets it alone, never saved, and K5 is a role's; the encoder no role has (K8 in PAN7's layout)
+ * is the app's to read (plat_enc_free).
  * Lights: the 18 buttons' LEDs by the panel map, PLAY's second colour on the spare line (LED_PLAY_GREEN); no key
  * LEDs (the keys parameters are ignored). The glow, mid and breath levels are the board's column counts.
  * Pads: 16 RGB LEDs (WS2812 class) on the LCD's SPI, one frame between two LCD transfers (smk_pads_flush, from the
@@ -18,9 +20,9 @@
 #define SMK_MASTER_STEP 96                         /* a detent of K5 */
 #define SMK_MASTER_SAVE_MS 2000u
 #define SMK_MASTER_ENC 4u                          /* K5 (0-based) */
-#ifdef APP_SMK_MASTER_FADER
-#define SMK_MASTER_KNOB 0                          /* the app's fader is MASTER (plat_master_set at its moves and at the
-                                                    * start): K5 an encoder like the others, the level never written */
+#ifdef APP_SMK_MASTER_APP
+#define SMK_MASTER_KNOB 0                          /* MASTER the app's (plat_master_set: a fader, the free encoder):
+                                                    * K5 an encoder like the others, the level never written */
 #else
 #define SMK_MASTER_KNOB 1
 #endif
@@ -94,6 +96,18 @@ void plat_master_set(uint32_t q12)
     smk_master = (int32_t)(q12 > 4096u ? 4096u : q12);   /* (heard by the next passes: smk_main_poll eases it in) */
     if (SMK_MASTER_KNOB)
         smk_master_t = fm1_ms | 1u;                /* kept like a turn of K5 (the save skips a level already there) */
+}
+int32_t plat_enc_free(void)                        /* the encoder no role has (PAN7's K8, as the calibration left the
+                                                    * roles; K5 MASTER's when it is base's), + clockwise as the board
+                                                    * wires them all; 0 when every one has a role */
+{
+    uint32_t used = SMK_MASTER_KNOB ? 1u << SMK_MASTER_ENC : 0u, e;
+    for (e = 0; e < NE; e++)
+        used |= 1u << panel.enc[e];
+    for (e = 0; e < FM1_NENC; e++)
+        if (!(used >> e & 1u))
+            return fm1_enc_take(e);
+    return 0;
 }
 static void smk_master_load(void)                  /* after panel_init: the level saved with the calibration */
 {

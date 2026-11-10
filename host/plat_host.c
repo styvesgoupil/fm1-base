@@ -105,6 +105,8 @@
  *                                keys 0..26 too); VEL 1..127 (default 100) is what plat_key_vel reports
  *   pad P down [VEL] | pad P up | pad P press N   a pad hit (VEL default 100), held with pressure N (0..127)
  *   fader I V                    fader I (0..3) at V (0..127)
+ *   turn K8 N [MS]               K8, the encoder no role has: plat_enc_free's detents (expect master N: plat_master_set's
+ *                                level, 0..4096)
  *   wheel pitch V | wheel mod V  the pitch wheel at V (-8192..8191, 0 at rest), the mod wheel at V (0..127)
  *   pedal down | pedal up        the sustain pedal
  *   padleds                      print the pads' lights (plat_pad_rgb), 0xRRGGBB each
@@ -253,6 +255,8 @@ int plat_fader(int i) { return i >= 0 && i < 4 ? faders[i] : 0; }
 int plat_wheel(int w) { return w == PLAT_WHEEL_PITCH ? wheel_pitch : w == PLAT_WHEEL_MOD ? wheel_mod : 0; }
 int plat_pedal(void) { return pedal_down; }
 void plat_master_set(uint32_t q12) { master = q12 > 4096u ? 4096u : q12; }
+static int32_t enc_free_acc;            /* K8's detents, the encoder no role has (turn K8 N) */
+int32_t plat_enc_free(void) { int32_t v = enc_free_acc; enc_free_acc = 0; return v; }
 static void host_key37(int k, int down, uint32_t vel, int report)   /* a key of the 37: the FM-1's 27 see it too
                                                                      * (report: the app's readings for it too) */
 {
@@ -2359,6 +2363,8 @@ static int expect(const char *what, const char *val)
         got = pedal_down;
     else if (!strncmp(what, "fader", 5) && what[5] >= '0' && what[5] <= '3' && !what[6])
         got = faders[what[5] - '0'];
+    else if (!strcmp(what, "master"))               /* the virtual MASTER's level, 0..4096 (plat_master_set's) */
+        got = (int)master;
     else if (!strcmp(what, "wheel_pitch"))
         got = wheel_pitch;
     else if (!strcmp(what, "wheel_mod"))
@@ -2764,6 +2770,15 @@ int main(int argc, char **argv)
         } else if (!strcmp(cmd, "turn")) {
             int e = find_name(ENC_N, NE, a), n = atoi(b), s = n > 0 ? 1 : -1;
             uint32_t gap = c[0] ? (uint32_t)atoi(c) : 80u;
+#if PLAT_SMK37
+            if (!strcmp(a, "K8")) {              /* (the SMK's K8: no role, plat_enc_free) */
+                for (; n; n -= s) {
+                    enc_free_acc += s;
+                    run_ms(gap);
+                }
+                continue;
+            }
+#endif
             if (e < 0) {
                 printf("line %d: no encoder %s\n", lineno, a);
                 return 2;

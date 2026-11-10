@@ -729,7 +729,8 @@ int app_stats_quiet(void);
  * NOTE REPEAT as LFO, PARA as EDIT, GLOBE as GLO, PATCH as HOME, BT as SAVE, ARP, SEQ, SEQ PLAY, SEQ REC,
  * OCTAVE-/+; HARDWARE CALIBRATION re-teaches them) plus B_KBANK, B_FBANK, B_LEFT, B_RIGHT; plat_enc the seven
  * roles on K6 (SELECT), K7 (ALGORITHM), K8 (PRESETS), K1..K4; plat_master a virtual MASTER turned by K5, kept with the
- * panel calibration (plat_master_set: an app's own saved level); plat_lights the 18 buttons' LEDs and PLAY's second
+ * panel calibration (plat_master_set: an app's own saved level; APP_SMK_MASTER_APP: the app's alone, K5 PRESETS, K8
+ * plat_enc_free's, nothing saved); plat_lights the 18 buttons' LEDs and PLAY's second
  * colour, no key LEDs; plat_battery as on the FM-1. Not yet confirmed on a unit (the board layer follows Melodee's own
  * SMK-37 port, which runs on an Elite); the Pro and the MKE-P37 are the same firmware under their names. */
 #if PLAT_SMK37
@@ -754,4 +755,6 @@ int plat_wheel(int w);                 /* PLAT_WHEEL_PITCH -8192..8191 (0 at res
 int plat_pedal(void);                  /* 1 = the sustain pedal is down (either polarity: the jack's rest level is
                                         * read at power-on, so plug the pedal in before switching on) */
 void plat_master_set(uint32_t q12);    /* the virtual MASTER's level, 0..4096 */
+int32_t plat_enc_free(void);           /* the encoder no role has (K8 when the app owns MASTER, APP_SMK_MASTER_APP: PAN7),
+                                        * detents since the last call, + = clockwise; 0 when there is none */
 #endif
