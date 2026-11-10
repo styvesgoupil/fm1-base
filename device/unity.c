@@ -409,6 +409,27 @@ static void rs_show(uint32_t pct)
 #define APP_BACKUP_NO B_HOME
 #define APP_BACKUP_NO_NAME "HOME"
 #endif
+#if PLAT_SMK37 && defined APP_SMK_PAD_ANSWERS
+/* the SMK-37's pads answer too (the app's choice, APP_SMK_PAD_ANSWERS): pad 2 (1) green, yes; pad 1 (0) red, no; lit
+ * while the question waits, dark after; a hit at any velocity */
+static void rs_pads(int on)
+{
+    plat_pad_rgb(1, on ? 0x00FF00u : 0u);
+    plat_pad_rgb(0, on ? 0xFF0000u : 0u);
+    smk_pads_flush();
+}
+static int rs_ask_wait(void);
+static int rs_ask(void)
+{
+    int r;
+    (void)plat_pads_pressed();                      /* (a hit from before: not an answer) */
+    rs_pads(1);
+    r = rs_ask_wait();
+    rs_pads(0);
+    return r;
+}
+#define rs_ask rs_ask_wait
+#endif
 static int rs_ask(void)                             /* yes, no; playing or 60 s: no. The hand's buttons only */
 {
     uint32_t t0 = fm1_ms, was = plat_buttons() & ~mirror_in_buttons() & ~remote.btn;
@@ -425,6 +446,12 @@ static int rs_ask(void)                             /* yes, no; playing or 60 s:
         uint32_t b = plat_buttons() & ~mirror_in_buttons() & ~remote.btn, down = b & ~was;
         fm1_wdt_feed();
         was = b;
+#if PLAT_SMK37 && defined APP_SMK_PAD_ANSWERS
+        {
+            uint32_t ph = plat_pads_pressed();
+            down |= (ph >> 1 & 1u) << APP_BACKUP_YES | (ph & 1u) << APP_BACKUP_NO;
+        }
+#endif
         if (down >> APP_BACKUP_YES & 1u)
             return 1;
         if ((down >> APP_BACKUP_NO & 1u) || rs_playing())
@@ -432,6 +459,9 @@ static int rs_ask(void)                             /* yes, no; playing or 60 s:
     }
     return 0;
 }
+#ifdef rs_ask
+#undef rs_ask
+#endif
 static void rs_reload(void)
 {
     app_panic();

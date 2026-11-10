@@ -110,6 +110,7 @@
  *   wheel pitch V | wheel mod V  the pitch wheel at V (-8192..8191, 0 at rest), the mod wheel at V (0..127)
  *   pedal down | pedal up        the sustain pedal
  *   padleds                      print the pads' lights (plat_pad_rgb), 0xRRGGBB each
+ *   expect pad_rgbP N            pad P's light as plat_pad_rgb last set it, 0xRRGGBB (as a number)
  *   expect pads N | pedal N | fader0..3 N | wheel_pitch N | wheel_mod N | pad_rgb_sets N (calls of plat_pad_rgb
  *                                since the start)
  * FILE "out:NAME" for backup, restore, backup_damage, backup_trim and mirror: NAME in OUTDIR (fbdump: always there).
@@ -2365,6 +2366,8 @@ static int expect(const char *what, const char *val)
         got = faders[what[5] - '0'];
     else if (!strcmp(what, "master"))               /* the virtual MASTER's level, 0..4096 (plat_master_set's) */
         got = (int)master;
+    else if (!strncmp(what, "pad_rgb", 7) && what[7] >= '0' && what[7] <= '9')   /* pad_rgbP: pad P's light, 0xRRGGBB */
+        got = (int)pad_rgb[atoi(what + 7) % NPADS];
     else if (!strcmp(what, "wheel_pitch"))
         got = wheel_pitch;
     else if (!strcmp(what, "wheel_mod"))
