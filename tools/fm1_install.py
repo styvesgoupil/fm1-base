@@ -410,16 +410,19 @@ class Updater:
             link.close()
         return None
 
-    def settle(self, dev, product):
+    def settle(self, dev, product, step=lambda *a: None):
         """dev as the new firmware tells itself once it has settled: its plain answer the product's start (NAME_ and
         three digits, chip/ota.c) while HS_FULL went unanswered (its first boot's first seconds: FRASIL 3.3's, card
         #152), asked again until its whole identity comes, DELAY["settle"] at most; another answer: dev as it is"""
-        end = time.monotonic() + DELAY["settle"]
-        while dev.id.text != product and product.startswith(dev.id.text) and time.monotonic() < end:
+        t0, asks = time.monotonic(), 0
+        while dev.id.text != product and product.startswith(dev.id.text) and time.monotonic() < t0 + DELAY["settle"]:
             time.sleep(DELAY["retry"] / 2)
+            asks += 1
             ident = handshake(dev.link)
             if ident:
                 dev = Device(dev.link, ident, dev.name)
+        if asks:                                 # (how long its first boot kept HS_FULL waiting: told)
+            step("settled", f"{time.monotonic() - t0:.1f} s, asked {asks} more")
         return dev
 
     def wait_for(self, want, secs):
@@ -555,7 +558,7 @@ class Updater:
         back = self.wait_for(lambda i: not i.loader, DELAY["wait_reboot"])
         if not back:
             raise InstallError("noreturn", "the FM-1 did not come back: power-cycle it")
-        back = self.settle(back, product)
+        back = self.settle(back, product, step)
         back.link.close()
         if back.id.text != product:
             raise InstallError("mismatch", f"written, but the FM-1 reports {back.id.text} (expected {product})")
@@ -632,7 +635,7 @@ class Progress:
         else:
             self.end()
             msg = {"start": f"starting the update on {a}", "loader": "switching to update mode",
-                   "reboot": "restarting", "done": f"done: the FM-1 runs {a}"}[k]
+                   "reboot": "restarting", "settled": f"its whole identity after {a}", "done": f"done: the FM-1 runs {a}"}[k]
             print(msg, file=self.out, flush=True)
 
     def put(self, s):
