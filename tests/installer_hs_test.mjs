@@ -59,6 +59,23 @@ for (const [what, answer, want, asksFull, jedec] of cases) {
   check("felucca-bsp#29's bytes after the text: the text up to its first zero", dev && dev.id.text === "FM-1_6010000" &&
         dev.id.model === "FM-1" && dev.id.version === 6010000);
 }
+{   // the new firmware's first boot slow to answer HS_FULL (FRASIL 3.3 over 3.2, card #152: "written, but the device
+    // reports FM-1_470"): an install's settle asks again until its whole identity; one that never tells it, as before
+  let n = 0;
+  const late = (t) => (q) => same(q, HS_QUERY) ? cut(t) : same(q, HS_FULL) ? (n++ >= 3 ? t : null) : null;
+  const a = access(late("FM-1_6010000")), u = new Updater(a);
+  let dev = await u.find();
+  check("a first boot deaf to HS_FULL: found with its plain answer", dev && dev.id.text === "FM-1_601");
+  dev = await u.settle(dev, "FM-1_6010000");
+  dev.link.close();
+  check(`  settled: its whole identity, HS_FULL asked ${n} times`, dev.id.text === "FM-1_6010000" && n >= 4);
+  const b = access(before("FM-1_015")), v = new Updater(b);
+  let m = await v.find();
+  m = await v.settle(m, "FM-1_6010000", 1500);
+  m.link.close();
+  check("  M-VAVE's FM-1_015 (not the product's start): as it is, not asked again", m.id.text === "FM-1_015" &&
+        b.output.sent.filter((q) => same(q, HS_FULL)).length === 1);
+}
 // the bytes of the query with 01, as chip/ota.c checks them (ota_take: header, length, checksum)
 check("HS_FULL is 00 59 11, length 1, body 01, checksum FE",
       same(HS_FULL, [0xF0, ...pack7([0, 0x59, 0x11, 1, 0, 0, 1, 0xFE]), 0xF7]) &&

@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT / "tools"))
 import fm1_install as I  # noqa: E402
 
 I.DELAY.update(open=0, start=0.01, start_fast=0.01, fast_hello=0.05, reply=0, loader=0.01, reboot=0.01, retry=0.02, poll=0.05, hs=0.1, hs_full=0.1,
-               idle_check=0.4, idle_write=0.4, wait_loader=2, wait_reboot=2)
+               idle_check=0.4, idle_write=0.4, wait_loader=2, wait_reboot=2, settle=1)
 failed = 0
 
 
@@ -68,12 +68,13 @@ class FakeFM1:
     """a MIDI backend with one FM-1 on it"""
 
     def __init__(self, image, identity="FM-1_015", name="FM-1", unplug_after=None, after_write="FM-1_900",
-                 stall_after=None, bad_addr=None, refuse_arm=False, new_ota=(), jedec=0, loader="ota-FM-1_900"):
+                 stall_after=None, bad_addr=None, refuse_arm=False, new_ota=(), jedec=0, loader="ota-FM-1_900", deaf=0):
         self.image, self.unplug_after, self.after_write, self.loader = image, unplug_after, after_write, loader
         self.new_ota, self.jedec = set(new_ota), jedec   # identities whose ota.c cuts the plain answer; bsp#29's bytes
         self.refuse_arm, self.armed, self.arms = refuse_arm, False, []
         self.stall_after, self.bad_addr = stall_after, bad_addr
         self.served = self.bad = self.upgrades = self.hs_full = 0
+        self.deaf, self.deaf_left = deaf, 0      # (the new firmware's first boot: its first HS_FULLs unanswered, card #152)
         self.sent, self.links, self.gen, self.lock = [], [], 0, threading.Lock()
         self.boot(identity, name)
 
@@ -81,6 +82,7 @@ class FakeFM1:
         with self.lock:
             self.gen += 1
             self.identity, self.name, self.connected = identity, name, True
+            self.deaf_left = self.deaf if identity == self.after_write else 0
             self.waiting, self.queue = None, []
 
     def input_names(self):
@@ -115,7 +117,9 @@ class FakeFM1:
             self.ident(self.identity[:self.identity.index("_") + 4] if new else self.identity)
         elif d == I.HS_FULL:
             self.hs_full += 1
-            if new:
+            if self.deaf_left:
+                self.deaf_left -= 1
+            elif new:
                 self.ident(self.identity)
         elif d == I.UPGRADE:
             if self.identity.startswith("FM1_") and not self.armed:
@@ -261,6 +265,18 @@ def installs():
     rc, out, err = cli([pkgfile("long.fwsc", rawl), "--yes"], dev)
     ok(rc == 0 and dev.bad == 0 and "device:  FM-1_6010000" in out and "done: the FM-1 runs FM-1_6010100" in out,
        "install: FM-1_601 to the plain query, the whole identity to HS_FULL")
+    # the new firmware's first boot slow to answer HS_FULL (FRASIL 3.3 over 3.2, card #152: "written, but the FM-1
+    # reports FM-1_470"): asked again until its whole identity; one that never tells it: the mismatch, as before
+    dev = FakeFM1(I.logical_image(rawl), identity="FM-1_6010000", name="FM-1", after_write="FM-1_6010100",
+                  new_ota={"FM-1_6010000", "FM-1_6010100"}, deaf=3)
+    rc, out, err = cli([pkgfile("long.fwsc", rawl), "--yes"], dev)
+    ok(rc == 0 and "done: the FM-1 runs FM-1_6010100" in out and dev.hs_full >= 4,
+       f"install: the first boot's HS_FULL unanswered three times, then its whole identity (asked {dev.hs_full})")
+    dev = FakeFM1(I.logical_image(rawl), identity="FM-1_6010000", name="FM-1", after_write="FM-1_6010100",
+                  new_ota={"FM-1_6010000", "FM-1_6010100"}, deaf=10 ** 6)
+    rc, out, err = cli([pkgfile("long.fwsc", rawl), "--yes"], dev)
+    ok(rc != 0 and "reports FM-1_601 (expected FM-1_6010100)" in (out + err),
+       "install: a first boot that never answers HS_FULL: the mismatch, its short answer named")
     rawl = package("FM-1_6010000")
     dev = FakeFM1(I.logical_image(rawl), identity="FM-1_6000900", name="FM-1", after_write="FM-1_6010000",
                   new_ota={"FM-1_6010000"})

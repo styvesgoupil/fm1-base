@@ -65,7 +65,7 @@ LOADER_MARK = b"FELUCCA-LOADER-1"
 # seconds; the tests shorten them
 DELAY = {"open": 0.3, "start": 2.0, "start_fast": 0.05, "fast_hello": 0.5, "reply": 0.01, "loader": 3.0, "reboot": 3.0,
          "retry": 1.0, "poll": 1.0, "hs": 1.0, "hs_full": 0.6, "idle_check": 8.0, "idle_write": 180.0,
-         "wait_loader": 30.0, "wait_reboot": 40.0, "hello": fm1ports.TIMEOUT}
+         "wait_loader": 30.0, "wait_reboot": 40.0, "settle": 15.0, "hello": fm1ports.TIMEOUT}
 
 # M-VAVE's FM1 Open firmware (V10, 2026-10): its updater takes only a package it has been told about
 # first (cmd 49 reads its state, cmd 50 arms it with the image length and the package's SHA-256); then
@@ -410,6 +410,18 @@ class Updater:
             link.close()
         return None
 
+    def settle(self, dev, product):
+        """dev as the new firmware tells itself once it has settled: its plain answer the product's start (NAME_ and
+        three digits, chip/ota.c) while HS_FULL went unanswered (its first boot's first seconds: FRASIL 3.3's, card
+        #152), asked again until its whole identity comes, DELAY["settle"] at most; another answer: dev as it is"""
+        end = time.monotonic() + DELAY["settle"]
+        while dev.id.text != product and product.startswith(dev.id.text) and time.monotonic() < end:
+            time.sleep(DELAY["retry"] / 2)
+            ident = handshake(dev.link)
+            if ident:
+                dev = Device(dev.link, ident, dev.name)
+        return dev
+
     def wait_for(self, want, secs):
         end = time.monotonic() + secs
         while time.monotonic() < end:
@@ -543,6 +555,7 @@ class Updater:
         back = self.wait_for(lambda i: not i.loader, DELAY["wait_reboot"])
         if not back:
             raise InstallError("noreturn", "the FM-1 did not come back: power-cycle it")
+        back = self.settle(back, product)
         back.link.close()
         if back.id.text != product:
             raise InstallError("mismatch", f"written, but the FM-1 reports {back.id.text} (expected {product})")

@@ -345,6 +345,19 @@ export class Updater {
     return null;
   }
 
+  // dev as the new firmware tells itself once it has settled: its plain answer the product's start (NAME_ and three
+  // digits, chip/ota.c) while HS_FULL went unanswered (its first boot's first seconds: FRASIL 3.3's, card #152),
+  // asked again until its whole identity comes, 15 s at most; another answer: dev as it is
+  async settle(dev, product, ms = 15000) {
+    const end = Date.now() + ms;
+    while (dev.id.text !== product && product.startsWith(dev.id.text) && Date.now() < end) {
+      await sleep(500);
+      const id = await handshake(dev.link);
+      if (id) dev = { ...dev, id };
+    }
+    return dev;
+  }
+
   async waitFor(filter, ms) {
     const end = Date.now() + ms;
     while (Date.now() < end) {
@@ -429,8 +442,9 @@ export class Updater {
     if (!s2.finished) throw fail(s2.lost ? "lost" : "stopped", `the loader ${s2.lost ? "was disconnected" : "stopped"} after ${s2.served} requests. Replug and press Install again to resume.`);
     step("reboot");
     await sleep(3000);
-    const back = await this.waitFor((id) => !IS_OTA(id), 40000);
+    let back = await this.waitFor((id) => !IS_OTA(id), 40000);
     if (!back) throw fail("noreturn", "the device did not come back: power-cycle it");
+    back = await this.settle(back, product);
     back.link.close();
     if (back.id.text !== product) throw fail("mismatch", `installed, but the device reports ${back.id.text}`, back.id.text);
     step("done", back.id.text);
@@ -557,8 +571,9 @@ export class Updater {
       if (product) {
         step("reboot");
         await sleep(3000);
-        const back = await this.waitFor((id) => !IS_OTA(id), 40000);
+        let back = await this.waitFor((id) => !IS_OTA(id), 40000);
         if (!back) throw fail("noreturn", "the device did not come back: power-cycle it");
+        back = await this.settle(back, product);
         back.link.close();
         if (back.id.text !== product) throw fail("mismatch", `written, but the device reports ${back.id.text}`, back.id.text);
         step("done", back.id.text);
