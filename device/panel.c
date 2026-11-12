@@ -8,10 +8,11 @@
 #define FM1_NBTN 14u                     /* the FM-1 board's button ids (the SMK's header defines its own) */
 #endif
 #if PLAT_SMK37
-/* the SMK-37's printed labels for the FM-1's functions, then its own four buttons; K5 is MASTER (not taught) */
-static const char *const B_NAME[NB] = {"FX", "SCALE", "CHORD", "REPEAT", "PARA", "GLOBE", "PATCH", "BT",
+/* the SMK-37's printed labels for the FM-1's functions, then its own four buttons, whole (NOTE REPEAT, the widest, 172 px
+ * of FONT_L's 240); K5 is MASTER (not taught) */
+static const char *const B_NAME[NB] = {"FX", "SCALE", "CHORD", "NOTE REPEAT", "PARA", "GLOBE", "PATCH", "BT",
                                         "ARP", "SEQ", "SEQ PLAY", "SEQ REC", "OCTAVE-", "OCTAVE+",
-                                        "KBANK", "FBANK", "<", ">"};
+                                        "KNOB BANK", "FADER BANK", "<", ">"};
 #ifdef APP_SMK_MASTER_APP
 #define PANEL_ENC_RESERVED 0u            /* MASTER the app's: K5 a role's (PRESETS) */
 #else

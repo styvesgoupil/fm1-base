@@ -48,6 +48,12 @@ static int dev_frame(const uint8_t *p, uint32_t n);   /* bt_own_central.c */
 #include "uac_mix.h"                                /* the USB recording, the computer's audio, in that order */
 #if PLAT_SMK37
 #define FM1B_FLASH_JEDEC_OK(id) FL_JEDEC_OK(id)        /* the board's accepted parts (bsp boards/smk37/fm1_flash.h) */
+#define SYS_PLAY "SEQ PLAY"                         /* PLAY and REC as the panel prints them (panel.c B_NAME): the
+                                                     * screens' words below */
+#define SYS_REC "SEQ REC"
+#else
+#define SYS_PLAY "PLAY"
+#define SYS_REC "REC"
 #endif
 #include "fm1_flash_ok.h"                          /* the flash parts the storage may use (FM1B_FLASH_JEDEC_OK) */
 #if FM1B_BT_AUDIO
@@ -1191,8 +1197,8 @@ static void safe_main(void)
     sys_box(0, 102, 240, SYS_S, "NO SOUND. USB IS ON:", C_WHITE, 1);
     sys_box(0, 122, 240, SYS_S, "REINSTALL FROM THE", C_WHITE, 1);
     sys_box(0, 142, 240, SYS_S, "WEB INSTALLER.", C_WHITE, 1);
-    sys_box(0, 172, 240, SYS_S, "PLAY: TRY AGAIN", C_HI, 1);
-    sys_box(0, 190, 240, SYS_S, "REC: UPDATE MODE", C_HI, 1);
+    sys_box(0, 172, 240, SYS_S, SYS_PLAY ": TRY AGAIN", C_HI, 1);
+    sys_box(0, 190, 240, SYS_S, SYS_REC ": UPDATE MODE", C_HI, 1);
     if (fm1_crash.magic == FM1_CRASH_MAGIC) {
         b[0] = 'P';
         b[1] = 'C';
@@ -1238,7 +1244,7 @@ static void safe_main(void)
         if (usb.uboot_req)
             enter_uboot("UBOOT (USB)");
         if ((fm1_in.buttons & rec) && fm1_ms - t0 > 500u)
-            enter_uboot("UPDATE MODE (REC)");
+            enter_uboot("UPDATE MODE (" SYS_REC ")");
     }
 }
 
@@ -1382,7 +1388,7 @@ static void fm1_main(void)
         ((1u << FM1_BTN_OCT_DOWN) | (1u << FM1_BTN_OCT_UP)))
         panel_setup();                              /* OCT- + OCT+ held at power-on */
     if (fm1_in.buttons & (1u << panel.btn[B_REC]))
-        enter_uboot("UPDATE MODE (REC)");           /* REC held at power-on: the chip's update mode, the same key as
+        enter_uboot("UPDATE MODE (" SYS_REC ")");   /* REC held at power-on: the chip's update mode, the same key as
                                                      * m-bootloader's (which takes it first when it is installed): a way
                                                      * in when this firmware starts but its USB cannot be reached */
     fm1_delay_ms(400);
