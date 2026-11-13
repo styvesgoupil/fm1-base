@@ -178,7 +178,16 @@ static void audio_init(void)
     uint32_t i;
     for (i = 0; i < 2u * HALF_WORDS; i++)
         abuf[i] = 0;
-    fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3);
+#if PLAT_SMK37
+    fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3);  /* (its board's start: no clock check) */
+#else
+    /* felucca-bsp's checked start refuses a PLL0 it does not know. An FM-1's bootloader always sets it; it reads 0
+     * only in emulators made before they imitated it (fm1-emu before d2bcc33: its 0.3.0 and 0.4.0, Harbor,
+     * RemoteFM1's engine), where 3.3 was silent: there the audio starts unchecked, as 3.2's did (FRASIL card #163).
+     * Any other clock it does not know: still silence */
+    if (fm1_audio_init(abuf, HALF_WORDS, isr_alnk0, 3) == FM1_AUDIO_ERR_CLOCK && fm1_audio_pll0() == 0)
+        fm1_audio_start(abuf, HALF_WORDS, isr_alnk0, 3);
+#endif
 }
 
 static void audio_silence(void)                     /* IRQs off (flash erase): the DMA would loop stale audio */
