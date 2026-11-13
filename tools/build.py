@@ -25,6 +25,10 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              "MKE-P37_" + id_prefix's digits; the output NAME-smk37[-elite|-mke].fwsc and
                              build/firmware-smk37[-elite|-mke].json; the USB product string + " SMK-37"; not with
                              wifi or headphones). FM1B_BOARD / FM1B_MODEL in the environment override them
+  KEY_smk37 = ...            KEY's own value in the SMK-37's builds (board "smk37"), any key but board and model; the
+                             FM-1's build never reads it: id_prefix_smk37 = "FM-1_4" (an SMK-37 Elite release's room in
+                             its 20 characters: SMK-37 Elite_4XXYYZZ), pool_spare_smk37, install_smk37 (its installer,
+                             in its firmware.json), screenshot_smk37
   o2 = ["dsp/engine.c"]      separate units compiled at -O2 (the app's DSP), relative to APP_DIR (globs too); each with
                              its own directory on the include path
   unity_opt = "z"            the unity build (the platform, the app but its o2 units) at -Oz instead of -Os: smaller,
@@ -113,7 +117,9 @@ APP_DIR holds the app (app.h, app.c, its sources) and its fm1.toml:
                              spare the build insists on (8192 B of the pool; of the SRAM with ram_layout =
                              "packed"; 2048 B of the pool with WiFi; a demo build may spend it)
   pool_spare = 2048          the spare this app's builds insist on (8192 B, of the SRAM with ram_layout = "packed": the
-                             margin for what comes next; an app that spent it on purpose says how much it keeps)
+                             margin for what comes next; an app that spent it on purpose says how much it keeps);
+                             pool_spare_smk37 the SMK-37's builds' alone (its board takes 636 B of the pool: the
+                             pads' LED frame)
   msc = true                 disk mode: the FM-1 as a USB drive of the app's blocks (FM1B_MSC: device/msc.c, plat_disk_* in
                              plat.h; felucca-bsp usb.c FELUCCA_MSC), no USB MIDI or audio meanwhile
   lcd_panel = true           the M-VAVE panel's own ST7789V setup after the reset (FM1B_LCD_PANEL: porch, gate voltages, VCOM
@@ -329,6 +335,16 @@ def read_conf(path):
     if pending:
         raise SystemExit(f"{path}:{start}: a list without its ]")
     return conf
+
+
+def board_conf(conf, board):
+    """fm1.toml as a board's build reads it: KEY_<board> (id_prefix_smk37, pool_spare_smk37, ...) stands for KEY in
+    that board's builds, board and model excepted; the FM-1's build reads fm1.toml as it is -> the settings"""
+    if board == "fm1":
+        return conf
+    end = "_" + board
+    own = {k[:-len(end)]: v for k, v in conf.items() if k.endswith(end) and k[:-len(end)] not in ("", "board", "model")}
+    return {**conf, **own}
 
 
 def toolchain():
@@ -1668,6 +1684,8 @@ def main():
     a = ap.parse_args()
     APP = a.app.resolve()
     CONF = read_conf(APP / "fm1.toml")
+    BOARD = os.environ.get("FM1B_BOARD") or CONF.get("board", "fm1")
+    CONF = board_conf(CONF, BOARD)               # (an SMK-37 build: its KEY_smk37 over KEY)
     NAME = CONF.get("name", APP.name).lower()
     BLE = bool(CONF.get("ble")) and not a.no_ble
     OWN = BLE and CONF.get("ble_stack", "jieli") == "own"
@@ -1677,7 +1695,6 @@ def main():
     CPU2 = (bool(CONF.get("cpu2")) and os.environ.get("FM1B_CPU2") != "0") or os.environ.get("FM1B_CPU2") == "1"
     if BLE and WIFI:
         raise SystemExit("fm1.toml: ble and wifi together are not supported yet (one radio a build; --no-ble for WiFi)")
-    BOARD = os.environ.get("FM1B_BOARD") or CONF.get("board", "fm1")
     MODEL = os.environ.get("FM1B_MODEL") or CONF.get("model")
     if BOARD not in ("fm1", "smk37"):
         raise SystemExit(f"fm1.toml board {BOARD!r}: \"fm1\" or \"smk37\"")
@@ -1696,7 +1713,7 @@ def main():
     if not re.fullmatch(r"FM-1_\d+", prefix):
         raise SystemExit(f"fm1.toml id_prefix {prefix!r}: FM-1_ and digits only (the update tools parse it)")
     # the identity's model: the FM-1's, or the SMK-37 model's ("SMK-37 Elite_11..": the digits as the FM-1's scheme;
-    # 20 characters at most, so an SMK-37 Elite release needs a one-digit prefix)
+    # 20 characters at most, so an SMK-37 Elite release needs a one-digit prefix: fm1.toml id_prefix_smk37)
     model_id = SMK_MODELS[MODEL][2] if BOARD == "smk37" else "FM-1"
     prefix = model_id + prefix[len("FM-1"):]
     PRODUCT = prefix + "00"
@@ -1712,7 +1729,8 @@ def main():
         RELEASE = a.release
         name = f"{STEM}-{a.release}.fwsc"
     if len(PRODUCT) > 20:                         # (the package's 20 marker bytes: fm1pkg_make refuses it after the build)
-        raise SystemExit(f"identity {PRODUCT!r}: over 20 characters (fm1.toml id_prefix: fewer digits for this model)")
+        raise SystemExit(f"identity {PRODUCT!r}: over 20 characters (fm1.toml id_prefix, id_prefix_{BOARD} for this "
+                         "board's builds: fewer digits for this model)")
     # a release package needs firmware.json's keys; the simulator, the emulator, the .rfm1 and dev builds only warn
     firmware_json.require(CONF, bool(a.release) and not (a.host or a.web or a.rfm1), APP / "fm1.toml", APP)
     touch = any(re.search(r"^#define APP_TOUCH\b", f.read_text(errors="ignore"), re.M) for f in APP.glob("*.h"))

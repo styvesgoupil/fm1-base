@@ -9,7 +9,9 @@ tools/build.py writes it on every build, from fm1.toml and the parts the build t
 (`firmware-usb.json` from a `--no-ble` build; an SMK-37 build, fm1.toml `board = "smk37"`, its own beside it,
 `firmware-smk37.json`, `firmware-smk37-elite.json` or `firmware-smk37-mke.json`). For an app in a firmware's
 repository (`APP_DIR` named `app`, as `fm1-ctl/app`) the FM-1 build also writes the repository's `firmware.json`, only
-when its content has changed. fm1-base's own template gets only `template/build/firmware.json`.
+when its content has changed. fm1-base's own template gets only `template/build/firmware.json`. An SMK-37 build reads
+fm1.toml's `KEY_smk37` over `KEY` (tools/build.py): `install_smk37` and `screenshot_smk37` give its own installer and
+picture.
 
 It has no version: it describes the firmware, not a release, and the release's package carries its own.
 
