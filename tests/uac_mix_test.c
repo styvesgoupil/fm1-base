@@ -3,7 +3,8 @@
 /* USB audio around a render block (device/uac_mix.h) on felucca-bsp's own usb.c (uac_tap, uac_play): the USB recording
  * holds the app's render alone, never the computer's audio; the computer's audio comes in at plat_usb_play_gain's level
  * times MASTER (the square of its position), with USB AUDIO full after the tap at MASTER over both; muted, uac_play
- * still reads its ring (the read position moves as at any level, the stream stays primed).
+ * still reads its ring (the read position moves as at any level, the stream stays primed). What the firmware sees of it
+ * (uac_out_in, plat_usb_play_in): its loudest sample as sent, whatever the level, read once; a silent stream's 0.
  *   cc -Ibsp/chip -Ibsp/boards/fm1 tests/uac_mix_test.c [-DTEST_NO_OUT]   (TEST_NO_OUT: without usb_audio_out) */
 #include <stdio.h>
 #include <stdint.h>
@@ -35,11 +36,12 @@ static void check(int ok, const char *what, long got, long want)
 static int near(long a, long b) { return a - b < 2 && b - a < 2; }
 
 #if FELUCCA_UAC_OUT
+static int32_t pc = PC;                 /* (0: a silent stream) */
 static void feed(uint32_t n)            /* the computer's packets into the output ring */
 {
     uint32_t i;
     for (i = 0; i < n; i++)
-        uo_ring[(uo_w + i) & (UO_N - 1u)] = (uint32_t)(uint16_t)PC | (uint32_t)(uint16_t)(-PC) << 16;
+        uo_ring[(uo_w + i) & (UO_N - 1u)] = (uint32_t)(uint16_t)pc | (uint32_t)(uint16_t)(-pc) << 16;
     uo_w += n;
 }
 #endif
@@ -64,6 +66,19 @@ static void block(uint32_t gain, uint32_t master, int full, uint32_t play, int32
     ua_r = ua_w;                        /* the computer read it */
 }
 
+#if FELUCCA_UAC_OUT
+static void play(uint32_t blocks)       /* blocks of the computer's at unity, its frames not compared (a change in them) */
+{
+    int32_t o[2u * N];
+    while (blocks--) {
+        memset(o, 0, sizeof o);
+        feed(N);
+        uac_mix(o, N, 4096, 4096, 0, 4096);
+        ua_r = ua_w;
+    }
+}
+#endif
+
 int main(void)
 {
     int32_t l, r, rec;
@@ -72,12 +87,24 @@ int main(void)
     uac.feed = 1;                       /* the computer records */
 #if FELUCCA_UAC_OUT
     uo.alt = 1;                         /* the computer plays */
+    {
+        uint32_t pk = 1;
+        uo.pkts = 7;
+        check(uac_out_in(&pk) == 7u && pk == 0u, "nothing played yet: no peak", (long)pk, 0);
+    }
     feed(UO_TGT);                       /* primed */
     block(4096, 4096, 0, 4096, &l, &r, &rec);   /* MASTER up, the computer at unity */
     check(uo.go == 1, "primed", uo.go, 1);
     check(near(l, APP + PC * 256), "unity: the output's L", l, APP + PC * 256);
     check(near(r, APP - PC * 256), "unity: the output's R", r, APP - PC * 256);
     check(rec == rec_app, "unity: the recording, the app alone", rec, rec_app);
+    {
+        uint32_t pk;
+        (void)uac_out_in(&pk);
+        check(pk == PC, "unity: its peak as sent", (long)pk, PC);
+        (void)uac_out_in(&pk);
+        check(pk == 0u, "its peak read once", (long)pk, 0);
+    }
 
     block(4096, 4096, 0, 2048, &l, &r, &rec);   /* half */
     check(near(l, APP + PC * 128), "half: the output", l, APP + PC * 128);
@@ -98,6 +125,22 @@ int main(void)
         check(uo_r - r1 + 1u >= r1 - r0 && uo_r - r1 <= r1 - r0 + 1u, "muted: the ring read as at unity",
               (long)(uo_r - r1), (long)(r1 - r0));
         check(uo_w - uo_r < UO_TGT + N, "muted: the ring does not fill", (long)(uo_w - uo_r), UO_TGT);
+    }
+    {   /* muted, its peak as sent all the same; a silent stream: none */
+        uint32_t pk;
+        (void)uac_out_in(&pk);
+        check(pk == PC, "muted: its peak as sent", (long)pk, PC);
+        pc = 0;
+        play(1);
+        (void)uac_out_in(&pk);
+        check(pk == PC, "the block still in the ring: its peak", (long)pk, PC);
+        play(40);                       /* (the ring's older frames played out) */
+        (void)uac_out_in(&pk);
+        block(4096, 4096, 0, 4096, &l, &r, &rec);
+        (void)uac_out_in(&pk);
+        check(pk == 0u && l == APP, "a silent stream: no peak", (long)pk, 0);
+        pc = PC;
+        play(40);
     }
 
     /* USB AUDIO full: the render (at 4096) recorded, then the computer's at its level, then MASTER over both */

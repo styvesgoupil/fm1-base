@@ -25,6 +25,8 @@
  *                                stand-in stack is ready a second after the start)
  *   bta add NAME | bta drop NAME a Bluetooth audio device around, or gone (FM1B_BT_AUDIO: a link to it is lost)
  *   jack in | jack out           headphones into the jack, or out (plat_headphones; nothing plugged at the start)
+ *   usbplay N | usbplay off      the computer plays through the FM-1 (usb_audio_out): a packet each millisecond, its
+ *                                loudest sample N (0..32768; 0 a silent stream), or none (plat_usb_play_in)
  *   wav FILE | wavstop           start / stop recording the output
  *   usbwav FILE | usbwavstop     start / stop recording the USB audio input as a computer gets it: usb_audio_channels
  *                                (FM1B_UAC_CH) of 16 bits, the master on 1 and 2, the app's own after it (plat_usb_ch)
@@ -1394,6 +1396,14 @@ void plat_usb_audio_full(int on) { uac_full = on != 0; }
 void plat_speaker(int on) { (void)on; }        /* no speaker of its own here (the app's tests read its setting) */
 static uint32_t usb_play_q12 = 4096u;            /* plat_usb_play_gain: no USB audio on the host; kept for a test */
 void plat_usb_play_gain(uint32_t q12) { usb_play_q12 = q12 > 4096u ? 4096u : q12; }
+static int usb_play_lvl = -1;                    /* the script's computer playing through (usbplay): its peak, -1 none */
+static uint32_t usb_play_pkts, usb_play_peak;    /* plat_usb_play_in: a packet each millisecond while it plays */
+uint32_t plat_usb_play_in(uint32_t *peak)
+{
+    *peak = usb_play_peak;
+    usb_play_peak = 0;
+    return usb_play_pkts;
+}
 #if FM1B_UAC_CH > 2
 static int16_t usb_ch[APP_BLOCK][FM1B_UAC_CH];      /* plat_usb_ch: the block's frames (1 and 2 the master, after it) */
 int16_t *plat_usb_ch(uint32_t off, uint32_t *run)
@@ -2076,6 +2086,10 @@ static uint8_t web_down;                            /* the browser emulator's re
 static void sim_ms_begin(uint32_t ms)
 {
     now_ms = ms;
+    if (usb_play_lvl >= 0) {                    /* (usbplay: its packet this millisecond, at its level) */
+        usb_play_pkts++;
+        usb_play_peak = (uint32_t)usb_play_lvl > usb_play_peak ? (uint32_t)usb_play_lvl : usb_play_peak;
+    }
     ble_tick();
 #if FM1B_BT_AUDIO
     bta_tick();
@@ -2803,6 +2817,9 @@ int main(int argc, char **argv)
         } else if (!strcmp(cmd, "jack")) {          /* jack in | jack out: the headphone jack (plat_headphones) */
             host_hp = !strcmp(a, "in");
             run_ms(2);
+        } else if (!strcmp(cmd, "usbplay")) {       /* usbplay N | off: the computer plays through (plat_usb_play_in) */
+            usb_play_lvl = !strcmp(a, "off") ? -1 : atoi(a) < 0 ? 0 : atoi(a) > 32768 ? 32768 : atoi(a);
+            run_ms(1);
         } else if (!strcmp(cmd, "master")) {
             master = (uint32_t)atoi(a);
             run_ms(40);                         /* as the device's smoothing settles */

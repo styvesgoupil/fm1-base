@@ -492,6 +492,10 @@ void plat_usb_audio_full(int on);
  * before the computer's audio is mixed in, whatever this is: recording the FM-1 never records the computer's own
  * playback (device/uac_mix.h). Without usb_audio_out, nothing */
 void plat_usb_play_gain(uint32_t q12);
+/* ... and whether it comes: the packets the FM-1 has taken of it since the start (they move while the computer's stream
+ * flows, silent or not), and in *peak its loudest sample since the last call, 0..32768 (16-bit, as sent: before the
+ * level above). Main loop, one caller (the peak is cleared as it is read). Without usb_audio_out, 0 and 0 */
+uint32_t plat_usb_play_in(uint32_t *peak);
 /* the app's own channels of the USB audio input (fm1.toml usb_audio_channels = N, 4..10, even: FM1B_UAC_CH): channels 3..N,
  * PLAT_USB_CH of them, beside the master on 1 and 2, as 16-bit samples (32767: the master's full scale, the render's
  * 1 << 22 at 4096). In app_render, the frame off frames into the block being rendered: its channels at p[0] ..
