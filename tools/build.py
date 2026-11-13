@@ -1630,7 +1630,10 @@ def build_rfm1():
         if f.is_file():
             lic.append((f"{app_name}: {f.relative_to(repo)}", f))
     lic += [("fm1-base: LICENSE (MPL-2.0)", SRC / "LICENSE"), ("felucca-bsp: LICENSE", BSP / "LICENSE")]
-    em_root = subprocess.run(["em-config", "EMSCRIPTEN_ROOT"], capture_output=True, text=True).stdout.strip()
+    try:
+        em_root = subprocess.run(["em-config", "EMSCRIPTEN_ROOT"], capture_output=True, text=True).stdout.strip()
+    except OSError:                               # (emcc on the PATH without em-config: said below, not a crash)
+        em_root = ""
     em_lic = next((d / "LICENSE" for d in (Path(em_root), Path(em_root).parent) if em_root and (d / "LICENSE").exists()), None)
     if em_lic:
         lic.append(("Emscripten (its runtime, compiled in): LICENSE", em_lic))
