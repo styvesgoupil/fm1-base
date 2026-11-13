@@ -378,6 +378,10 @@ def _builder_start():
         return _BUILDER
     name = "jieli-" + hashlib.sha1(str(ROOT).encode()).hexdigest()[:10]
     st = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", name], capture_output=True, text=True)
+    if st.stdout.strip() == "true" and subprocess.run(   # (a tree made again at the same path within the hour, a
+            ["docker", "exec", "-w", "/work", name, "test", "-e", f"/work/{APP.relative_to(ROOT)}/fm1.toml"],
+            capture_output=True).returncode:             # release's PREPARE then DELIVER: its mount is the folder gone)
+        st = subprocess.CompletedProcess([], 0, "false")
     if st.stdout.strip() != "true":
         subprocess.run(["docker", "rm", "-f", name], capture_output=True)
         r = subprocess.run(["docker", "run", "-d", "--rm", "--name", name, "--platform", "linux/amd64",
