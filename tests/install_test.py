@@ -266,17 +266,25 @@ def installs():
     ok(rc == 0 and dev.bad == 0 and "device:  FM-1_6010000" in out and "done: the FM-1 runs FM-1_6010100" in out,
        "install: FM-1_601 to the plain query, the whole identity to HS_FULL")
     # the new firmware's first boot slow to answer HS_FULL (FRASIL 3.3 over 3.2, card #152: "written, but the FM-1
-    # reports FM-1_470"): asked again until its whole identity; one that never tells it: the mismatch, as before
+    # reports FM-1_470"): asked again until its whole identity
     dev = FakeFM1(I.logical_image(rawl), identity="FM-1_6010000", name="FM-1", after_write="FM-1_6010100",
                   new_ota={"FM-1_6010000", "FM-1_6010100"}, deaf=3)
     rc, out, err = cli([pkgfile("long.fwsc", rawl), "--yes"], dev)
     ok(rc == 0 and "done: the FM-1 runs FM-1_6010100" in out and dev.hs_full >= 4,
        f"install: the first boot's HS_FULL unanswered three times, then its whole identity (asked {dev.hs_full})")
+    # one that never tells it, its short answer the package's start (NAME_ and three digits): the same firmware still
+    # starting, taken once asked again (fm1-base b8e43f7: three times, a moment apart), its short answer named
     dev = FakeFM1(I.logical_image(rawl), identity="FM-1_6010000", name="FM-1", after_write="FM-1_6010100",
                   new_ota={"FM-1_6010000", "FM-1_6010100"}, deaf=10 ** 6)
     rc, out, err = cli([pkgfile("long.fwsc", rawl), "--yes"], dev)
-    ok(rc != 0 and "reports FM-1_601 (expected FM-1_6010100)" in (out + err),
-       "install: a first boot that never answers HS_FULL: the mismatch, its short answer named")
+    ok(rc == 0 and "done: the FM-1 runs FM-1_601" in out and dev.hs_full >= 4,
+       f"install: a first boot that never answers HS_FULL, its short answer the package's start: done (asked {dev.hs_full})")
+    # a short answer that is not the package's start (another firmware came back): the mismatch, as before
+    dev = FakeFM1(I.logical_image(rawl), identity="FM-1_6010000", name="FM-1", after_write="FM-1_6000900",
+                  new_ota={"FM-1_6010000", "FM-1_6000900"}, deaf=10 ** 6)
+    rc, out, err = cli([pkgfile("long.fwsc", rawl), "--yes"], dev)
+    ok(rc != 0 and "reports FM-1_600 (expected FM-1_6010100)" in (out + err),
+       "install: a short answer that is not the package's start: the mismatch, its short answer named")
     rawl = package("FM-1_6010000")
     dev = FakeFM1(I.logical_image(rawl), identity="FM-1_6000900", name="FM-1", after_write="FM-1_6010000",
                   new_ota={"FM-1_6010000"})

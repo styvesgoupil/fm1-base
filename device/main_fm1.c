@@ -142,6 +142,9 @@ static void render_block(int32_t *o)                /* ALNK0: one half, measured
 #ifndef FM1B_AUDIO_ASIDE
 #define FM1B_AUDIO_ASIDE 0                          /* fm1.toml audio_aside = true: 1 */
 #endif
+#ifndef FM1B_AUDIO_AHEAD
+#define FM1B_AUDIO_AHEAD 0                          /* fm1.toml audio_ahead = true: 1 (with FM1B_AUDIO_ASIDE) */
+#endif
 #if FM1B_AUDIO_ASIDE
 #include "audio_commit.c"                           /* the half rendered aside, copied in while its half is free;
                                                      * FM1B_AUDIO_ASIDE 0 (the default): straight into the DMA's half */
@@ -153,7 +156,26 @@ void fm1_alnk0_irq(void)                            /* via isr_alnk0 (hal/fm1_is
     fm1_audio_ack_aux(p);
     if (p & FM1_AUDIO_HALF) {
         uint32_t half = fm1_audio_free_half();
-#if FM1B_AUDIO_ASIDE
+#if FM1B_AUDIO_ASIDE && FM1B_AUDIO_AHEAD
+        uint32_t ok;
+        static uint8_t behind;                      /* (renders in a row that ran past their half) */
+        fm1_audio_ack_half();
+        ok = audio_commit(half);                    /* the block rendered last time */
+        render_block(aside);                        /* the next: one running past its half leaves the next half
+                                                     * pending, served as soon as this returns (a block's worth of
+                                                     * latency for a render up to two halves long) */
+        if (fm1_audio_pending() & FM1_AUDIO_HALF) {
+            if (++behind >= 2u) {                   /* (two in a row: that half dropped, as without the lookahead,
+                                                     * so the main loop gets its time; without this it starved) */
+                fm1_audio_ack_half();
+                behind = 0;
+                fm1b_dbg.late++;
+                audio_xruns++;
+            }
+        } else
+            behind = 0;
+        if (!ok) {
+#elif FM1B_AUDIO_ASIDE
         uint32_t ok;
         fm1_audio_ack_half();                       /* (now: a new pending after the render = the DMA moved on) */
         render_block(aside);
@@ -199,8 +221,8 @@ static void audio_silence(void)                     /* IRQs off (flash erase): t
 
 /* ------------------------------------------------------------ timer --- */
 static uint8_t usb_due;
-static uint32_t t5_gap_max, t5_late, t5_run_max;                /* the longest gap between ticks (us), and gaps over 300 us:
-                                                     * the key and light scan held up (the log reads and clears) */
+static uint32_t t5_gap_max, t5_late, t5_run_max;                /* the longest gap between ticks (us), and gaps over 3 ticks
+                                                     * (300 us at 10 kHz): the key and light scan held up (the log reads and clears) */
 void fm1_timer5_irq(void)
 {
     static uint32_t sub, t5_prev;
@@ -210,11 +232,12 @@ void fm1_timer5_irq(void)
         if (t5_prev) {
             if (gap > t5_gap_max)
                 t5_gap_max = gap;
-            if (gap > 300u)
+            if (gap > FM1B_T5_LATE_US)
                 t5_late++;
         }
 #if FM1B_MIDI_STAMP
-        /* what came in since the last tick came in, on the average, half way since: within 0.05 ms at 10 kHz (a tick
+        /* what came in since the last tick came in, on the average, half way since: within 0.05 ms at 10 kHz (half a
+         * tick: 0.1 ms at 5 kHz, 0.25 at 2; a tick
          * held up by a lock: half the gap). Every tick, the render's too: the poll below waits for the render, the
          * stamps do not. One SIE read and a look at the jack's ring */
         {
@@ -230,14 +253,18 @@ void fm1_timer5_irq(void)
     fm1b_dbg.timer_irqs++;
     if (fm1b_dbg.in_audio)
         fm1b_dbg.nested++;
-    fm1_input_tick();
-#if PLAT_SMK37 && FM1B_TRS
-    trs_out_tick();                                 /* the jack: one byte a tick, never waiting (midi_trs_out.c) */
+#if FM1B_T5_SCAN_DIV > 1
+    if (sub % FM1B_T5_SCAN_DIV == FM1B_T5_SCAN_DIV - 1u)   /* (a slower input_hz: not on the app's tick) */
 #endif
-    /* 2 kHz: all USB SIE traffic lives here. This ISR now nests into the audio render (so the key
+        fm1_input_tick();
+#if PLAT_SMK37 && FM1B_TRS
+    trs_out_tick();                                 /* the jack: one byte a tick, never waiting (midi_trs_out.c; the
+                                                     * SMK's TIMER5 at 10 kHz: build.py keeps its input_hz at 10000) */
+#endif
+    /* 2 kHz (2.5 at input_hz 5000): all USB SIE traffic lives here. This ISR now nests into the audio render (so the key
      * matrix keeps its rhythm, below); USB shares the MIDI queues with the audio ISR, so a poll that
      * falls inside the render waits for the first tick outside it, as it did before the nesting. */
-    if (sub % 5u == 0u) {
+    if (sub % FM1B_T5_USB_DIV == 0u) {
         usb_due = 1;
 #if FELUCCA_UAC && FELUCCA_UAC_CH == 2
         /* the USB audio stream cannot wait for the render (one packet per 1 ms frame, a render takes
@@ -248,8 +275,8 @@ void fm1_timer5_irq(void)
 #endif
     }
 #if FELUCCA_UAC && FELUCCA_UAC_CH > 2
-    /* usb_audio_channels: every tick (0.1 ms), nested in the render or not (outside it, but for the ticks usb_poll
-     * runs: it services the stream itself). A packet of 10 channels takes ~0.6 ms on the bus: polled at 2 kHz, the next
+    /* usb_audio_channels: every tick (0.1 ms: TIMER5 stays at 10 kHz whatever input_hz), nested in the render or not
+     * (outside it, but for the ticks usb_poll runs: it services the stream itself). A packet of 10 channels takes ~0.6 ms on the bus: polled at 2 kHz, the next
      * was often queued after the next frame's IN, which then found none (on an FM-1: 38,400 frames/s instead of
      * 44,100, the ring overflowing, halves dropped: crackles and a lower pitch). The stall count: FELUCCA_UAC_STALL_POLLS */
     if (fm1b_dbg.in_audio || !usb_due)
@@ -263,13 +290,17 @@ void fm1_timer5_irq(void)
 #endif
     }
 #ifdef APP_TICK
+#if FM1B_T5_APP_DIV == FM1B_T5_WRAP
     if (sub == 0u) {                                /* 1 kHz: the app's tick (a clock, a sequencer) */
+#else
+    if (sub % FM1B_T5_APP_DIV == 0u) {
+#endif
         in_tick = 1;
         app_tick();
         in_tick = 0;
     }
 #endif
-    if (++sub == 10u)
+    if (++sub == FM1B_T5_WRAP)
         sub = 0;
     {
         uint32_t run = (fm1_ticks() - t5_prev) / FM1_TICKS_PER_US;
@@ -1162,6 +1193,7 @@ static void fm1_fault(const fm1_crash_t *c)
     t0 = fm1_ticks();
     while ((uint32_t)(fm1_ticks() - t0) < 4000u * 1000u * FM1_TICKS_PER_US)
         ;
+    fm1_clock_restore();                            /* (a soft reset keeps the PLL: stock for what starts next) */
     fm1_reboot();
 }
 
@@ -1174,12 +1206,14 @@ void plat_restart(void)
     fm1_delay_ms(30);
     bootguard.pending = 0;                          /* intentional reset: not a failed boot */
     radio_clean_exit();
+    fm1_clock_restore();                            /* (a soft reset keeps the PLL: stock for what starts next) */
     fm1_reboot();
 }
 #endif
 
 static void enter_uboot(const char *why)
 {
+    fm1_clock_restore();                            /* (the chip's update mode at the stock clock) */
     fm1_audio_stop();
     lcd_fill(0, 0, 240, 240, C_BLACK);
     sys_box(0, 110, 240, SYS_S, why, C_WHITE, 1);
@@ -1235,7 +1269,8 @@ static void safe_main(void)
             sys_box(0, 172, 240, SYS_S, "STARTING " APP_NAME "...", C_HI, 1);
             usb_detach();
             fm1_delay_ms(30);
-            fm1_reboot();
+            fm1_clock_restore();                            /* (a soft reset keeps the PLL: stock for what starts next) */
+    fm1_reboot();
         }
         {   /* the log readout works here too: what crashed is the question safe mode raises */
             const uint8_t *p;
@@ -1351,6 +1386,16 @@ static void fm1_main(void)
 #endif
     if (safe_mode)
         safe_main();                                /* never returns */
+#if FM1B_CPU_396
+    {                                               /* fm1.toml cpu_clock = 396: PLL1 24 / 12 * 297 = 594 MHz, the
+                                                     * system clock 2/3 of it (JieLi's top, not for mass production);
+                                                     * after safe mode's choice, so two hung starts start at 360. The
+                                                     * resets put the stock clock back first (felucca-bsp fm1_sys.h) */
+        uint32_t f = irq_save();
+        fm1_clock_pll1(297u);
+        irq_restore(f);
+    }
+#endif
     if (fm1_crash.magic == FM1_CRASH_MAGIC && fm1_crash.count != fm1b_dbg.crash_seen) {
         char b[16];                                 /* a crash since the last boot: say so, a moment */
         fm1b_dbg.crash_seen = fm1_crash.count;
@@ -1523,8 +1568,16 @@ static void fm1_main(void)
         if (usb.ota_req) {
             usb.ota_req = 0;
             app_panic();                            /* silence: the update rewrites the flash */
+            fm1_clock_restore();                    /* (the update loader at the stock clock) */
             if (flash_ok)
                 ota_session();                      /* returns only if nothing was committed */
+#if FM1B_CPU_396
+            {                                       /* (nothing installed: back to cpu_clock's) */
+                uint32_t f = irq_save();
+                fm1_clock_pll1(297u);
+                irq_restore(f);
+            }
+#endif
             app_ui_init();
         }
         if (usb.uboot_req)
